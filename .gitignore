@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# env / secrets
+.env
+.env.*
+
+# OS
+.DS_Store
+
+# project index
+.claude-context/
+
+# claude code
+CLAUDE.md

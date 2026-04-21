@@ -1,0 +1,31 @@
+{
+  "name": "claude-context-optimizer",
+  "version": "0.1.0",
+  "description": "Local MCP server that gives Claude Code semantic search over your codebase using embeddings",
+  "type": "module",
+  "bin": {
+    "claude-context-optimizer": "./bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "node --watch dist/mcp/server.js",
+    "start": "node dist/mcp/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "better-sqlite3": "^9.4.3",
+    "chokidar": "^3.6.0",
+    "glob": "^11.0.0",
+    "ignore": "^5.3.1",
+    "tree-sitter": "^0.25.0",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-php": "^0.24.2",
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}
