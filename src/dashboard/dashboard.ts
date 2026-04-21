@@ -7,35 +7,44 @@ import Database from 'better-sqlite3'
 
 
 export interface ActivityEvent {
-  ts: number
-  type: 'indexed' | 'removed' | 'startup'
-  file: string
-  chunks?: number
+    ts: number
+    type: 'indexed' | 'removed' | 'startup'
+    file: string
+    chunks?: number
 }
 
 const activityLog: ActivityEvent[] = []
 const sseClients = new Set<http.ServerResponse>()
+let indexingInProgress = false
+
+export function setIndexing(value: boolean) {
+    indexingInProgress = value
+    const data = `data: ${JSON.stringify({ type: '__indexing__', value })}\n\n`
+    for (const res of sseClients) res.write(data)
+}
 
 export function emitActivity(event: ActivityEvent) {
-  activityLog.unshift(event)
-  if (activityLog.length > 200) activityLog.pop()
+    activityLog.unshift(event)
+    if (activityLog.length > 200) activityLog.pop()
 
-  const data = `data: ${JSON.stringify(event)}\n\n`
-  for (const res of sseClients) {
-    res.write(data)
-  }
+    const data = `data: ${JSON.stringify(event)}\n\n`
+    for (const res of sseClients) {
+        res.write(data)
+    }
 }
 
 function getStats(db: Database.Database) {
-  const files = (db.prepare('SELECT COUNT(DISTINCT filepath) as c FROM chunks').get() as any).c as number
-  const chunks = (db.prepare('SELECT COUNT(*) as c FROM chunks').get() as any).c as number
-  const dbSize = (db.prepare('SELECT page_count * page_size as s FROM pragma_page_count(), pragma_page_size()').get() as any).s as number
-  const lastIndexed = (db.prepare('SELECT MAX(indexed_at) as t FROM file_hashes').get() as any).t as number | null
-  return { files, chunks, dbSize, lastIndexed }
+    const files = (db.prepare('SELECT COUNT(DISTINCT filepath) as c FROM chunks').get() as any).c as number
+    const chunks = (db.prepare('SELECT COUNT(*) as c FROM chunks').get() as any).c as number
+    const pageCount = (db.pragma('page_count') as any[])[0].page_count as number
+    const pageSize = (db.pragma('page_size') as any[])[0].page_size as number
+    const dbSize = pageCount * pageSize
+    const lastIndexed = (db.prepare('SELECT MAX(indexed_at) as t FROM file_hashes').get() as any).t as number | null
+    return { files, chunks, dbSize, lastIndexed, indexing: indexingInProgress }
 }
 
 function getFiles(db: Database.Database) {
-  return db.prepare(`
+    return db.prepare(`
     SELECT f.filepath, f.indexed_at, COUNT(c.id) as chunk_count
     FROM file_hashes f
     LEFT JOIN chunks c ON c.filepath = f.filepath
@@ -45,13 +54,13 @@ function getFiles(db: Database.Database) {
 }
 
 function html(db: Database.Database, projectRoot: string) {
-  const stats = getStats(db)
-  const mbSize = (stats.dbSize / 1024 / 1024).toFixed(1)
-  const lastIndexedStr = stats.lastIndexed
-    ? new Date(stats.lastIndexed).toLocaleString()
-    : 'never'
+    const stats = getStats(db)
+    const mbSize = (stats.dbSize / 1024 / 1024).toFixed(1)
+    const lastIndexedStr = stats.lastIndexed
+        ? new Date(stats.lastIndexed).toLocaleString()
+        : 'never'
 
-  return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -107,13 +116,18 @@ function html(db: Database.Database, projectRoot: string) {
   tr:last-child td { border-bottom: none; }
   td.filepath { color: var(--accent); word-break: break-all; }
   #live-indicator { display: flex; align-items: center; color: var(--green); font-size: 0.78rem; margin-left: auto; }
+  .indexing-badge { display: none; align-items: center; gap: 6px; background: #1c2a3a; color: var(--accent); font-size: 0.75rem; padding: 3px 10px; border-radius: 12px; border: 1px solid #2a4060; }
+  .indexing-badge.visible { display: flex; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  .spinner { width: 10px; height: 10px; border: 2px solid #2a4060; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 </style>
 </head>
 <body>
 <header>
   <h1>claude-context-optimizer</h1>
   <span>${projectRoot}</span>
-  <span id="live-indicator" style="margin-left:auto"><span class="dot green"></span>live</span>
+  <div id="indexing-badge" class="indexing-badge${stats.indexing ? ' visible' : ''}"><div class="spinner"></div>indexing…</div>
+  <span id="live-indicator"><span class="dot green"></span>live</span>
 </header>
 <nav>
   <button class="active" onclick="switchTab('overview', this)">Overview</button>
@@ -191,6 +205,10 @@ const feed = document.getElementById('activity-feed')
 const es = new EventSource('/events')
 es.onmessage = (e) => {
   const ev = JSON.parse(e.data)
+  if (ev.type === '__indexing__') {
+    document.getElementById('indexing-badge').classList.toggle('visible', ev.value)
+    return
+  }
   const placeholder = feed.querySelector('.file[style]')
   if (placeholder) placeholder.closest('.event').remove()
   const div = document.createElement('div')
@@ -203,6 +221,7 @@ es.onmessage = (e) => {
     document.getElementById('stat-chunks').textContent = s.chunks
     document.getElementById('stat-size').textContent = (s.dbSize / 1024 / 1024).toFixed(1) + ' MB'
     if (s.lastIndexed) document.getElementById('stat-last').textContent = new Date(s.lastIndexed).toLocaleString()
+    document.getElementById('indexing-badge').classList.toggle('visible', !!s.indexing)
   })
 }
 es.onerror = () => {
@@ -251,66 +270,85 @@ function escHtml(s) {
 }
 
 function eventHtml(e: ActivityEvent): string {
-  const t = new Date(e.ts).toLocaleTimeString()
-  const chunks = e.chunks !== undefined ? ` (${e.chunks} chunks)` : ''
-  return `<div class="event"><span class="ts">[${t}]</span><span class="badge ${e.type}">${e.type}</span><span class="file">${e.file}${chunks}</span></div>`
+    const t = new Date(e.ts).toLocaleTimeString()
+    const chunks = e.chunks !== undefined ? ` (${e.chunks} chunks)` : ''
+    return `<div class="event"><span class="ts">[${t}]</span><span class="badge ${e.type}">${e.type}</span><span class="file">${e.file}${chunks}</span></div>`
 }
 
-export function startDashboard(db: Database.Database, projectRoot: string, embeddingsConfig: any, searchConfig: any, port: number) {
-  const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url ?? '/', `http://localhost:${port}`)
+export function startDashboard(db: Database.Database, projectRoot: string, embeddingsConfig: any, searchConfig: any, port: number, fallbackPort?: number, onListening?: (port: number) => void) {
+    const server = http.createServer(async (req, res) => {
+        try {
+            const url = new URL(req.url ?? '/', `http://localhost:${port}`)
 
-    if (url.pathname === '/events') {
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-      })
-      // Send existing log on connect
-      for (const event of [...activityLog].reverse()) {
-        res.write(`data: ${JSON.stringify(event)}\n\n`)
-      }
-      sseClients.add(res)
-      req.on('close', () => sseClients.delete(res))
-      return
-    }
+            if (url.pathname === '/events') {
+                res.writeHead(200, {
+                    'Content-Type': 'text/event-stream',
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'Access-Control-Allow-Origin': '*',
+                })
+                // Send existing log on connect
+                for (const event of [...activityLog].reverse()) {
+                    res.write(`data: ${JSON.stringify(event)}\n\n`)
+                }
+                res.write(': connected\n\n')
+                sseClients.add(res)
+                req.on('close', () => sseClients.delete(res))
+                return
+            }
 
-    if (url.pathname === '/api/stats') {
-      const stats = getStats(db)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify(stats))
-      return
-    }
+            if (url.pathname === '/api/stats') {
+                const stats = getStats(db)
+                res.writeHead(200, { 'Content-Type': 'application/json' })
+                res.end(JSON.stringify(stats))
+                return
+            }
 
-    if (url.pathname === '/api/search') {
-      const query = url.searchParams.get('q') ?? ''
-      if (!query) { res.writeHead(400); res.end('[]'); return }
-      try {
-        const { searchCode } = await import('../search/search.js')
-        const results = await searchCode(db, query, embeddingsConfig, searchConfig)
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify(results))
-      } catch (err) {
-        res.writeHead(500)
-        res.end(JSON.stringify({ error: String(err) }))
-      }
-      return
-    }
+            if (url.pathname === '/api/search') {
+                const query = url.searchParams.get('q') ?? ''
+                if (!query) { res.writeHead(400); res.end('[]'); return }
+                try {
+                    const { searchCode } = await import('../search/search.js')
+                    const results = await searchCode(db, query, embeddingsConfig, searchConfig)
+                    res.writeHead(200, { 'Content-Type': 'application/json' })
+                    res.end(JSON.stringify(results))
+                } catch (err) {
+                    res.writeHead(500)
+                    res.end(JSON.stringify({ error: String(err) }))
+                }
+                return
+            }
 
-    if (url.pathname === '/api/files') {
-      const files = getFiles(db)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify(files))
-      return
-    }
+            if (url.pathname === '/api/files') {
+                const files = getFiles(db)
+                res.writeHead(200, { 'Content-Type': 'application/json' })
+                res.end(JSON.stringify(files))
+                return
+            }
 
-    // Default: serve dashboard HTML
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-    res.end(html(db, projectRoot))
-  })
+            // Default: serve dashboard HTML
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+            res.end(html(db, projectRoot))
+        } catch (err) {
+            if (!res.headersSent) res.writeHead(500)
+            res.end(`Internal error: ${err}`)
+        }
+    })
 
-  server.listen(port, '127.0.0.1')
+    server.on('error', (e: NodeJS.ErrnoException) => {
+        if (e.code === 'EADDRINUSE' && fallbackPort !== undefined && port !== fallbackPort) {
+            server.listen(fallbackPort, '127.0.0.1')
+        } else {
+            process.stderr.write(`[cco] dashboard error: ${e.message}\n`)
+        }
+    })
 
-  return server
+    server.on('listening', () => {
+        const addr = server.address() as { port: number }
+        onListening?.(addr.port)
+    })
+
+    server.listen(port, '127.0.0.1')
+
+    return server
 }

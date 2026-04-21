@@ -11,7 +11,9 @@ import { indexProject } from '../indexer/indexer.js'
 import { searchCode, getSymbol } from '../search/search.js'
 import { startWatcher } from '../watcher/watcher.js'
 import { loadConfig } from '../config/config.js'
-import { startDashboard, emitActivity } from '../dashboard/dashboard.js'
+import { startDashboard, emitActivity, setIndexing } from '../dashboard/dashboard.js'
+import { dashboardFallbackPort } from '../utils/port.js'
+import fs from 'fs'
 
 // Project root is passed as --project flag or defaults to cwd
 const args = process.argv.slice(2)
@@ -21,53 +23,21 @@ const projectRoot = path.resolve(
 )
 const noDashboard = args.includes('--no-dashboard')
 
-function dashboardPort(root: string): number {
-  let hash = 0
-  for (let i = 0; i < root.length; i++) {
-    hash = (hash * 31 + root.charCodeAt(i)) >>> 0
-  }
-  return 3333 + (hash % 1000)
-}
-
 async function main() {
   process.stderr.write(`[cco] starting for project: ${projectRoot}\n`)
 
   const config = loadConfig(projectRoot)
   const db = openDatabase(projectRoot)
 
-  // Run delta re-index on startup — non-fatal if it fails
-  process.stderr.write(`[cco] checking for changes...\n`)
-  try {
-    const { indexed, skipped, removed } = await indexProject(db, {
-      projectRoot,
-      embeddings: config.embeddings,
-      extensions: config.extensions,
-      ignore: config.ignore,
-      onProgress: (current, total, file) => {
-        process.stderr.write(`[cco] indexing ${current}/${total}: ${file}\n`)
-      },
-    })
-    process.stderr.write(`[cco] done. indexed=${indexed} skipped=${skipped} removed=${removed}\n`)
-    emitActivity({ ts: Date.now(), type: 'startup', file: `indexed=${indexed} skipped=${skipped} removed=${removed}` })
-  } catch (err) {
-    process.stderr.write(`[cco] indexing failed, continuing without index: ${err}\n`)
-    emitActivity({ ts: Date.now(), type: 'startup', file: 'indexing failed' })
-  }
-
-  // Start file watcher for live re-indexing
-  startWatcher(db, {
-    projectRoot,
-    embeddings: config.embeddings,
-    extensions: config.extensions,
-    ignore: config.ignore,
-    onActivity: emitActivity,
-  })
-
-  // Start dashboard
+  // Start dashboard early so it's available during indexing.
+  // Prefers port 3333; falls back to a project-hashed port if 3333 is taken.
   if (!noDashboard) {
-    const port = dashboardPort(projectRoot)
-    startDashboard(db, projectRoot, config.embeddings, config.search ?? {}, port)
-    process.stderr.write(`[cco] dashboard: http://localhost:${port}\n`)
+    const fallback = dashboardFallbackPort(projectRoot)
+    const portFile = `${projectRoot}/.claude-context/dashboard.port`
+    startDashboard(db, projectRoot, config.embeddings, config.search ?? {}, 3333, fallback, (boundPort) => {
+      process.stderr.write(`[cco] dashboard: http://localhost:${boundPort}\n`)
+      fs.writeFileSync(portFile, String(boundPort))
+    })
   }
 
   // Create MCP server
@@ -151,10 +121,45 @@ async function main() {
     }
   )
 
-  // Connect via stdio (Claude Code spawns and talks to us this way)
+  // Connect via stdio immediately so Claude Code doesn't time out waiting
   const transport = new StdioServerTransport()
   await server.connect(transport)
   process.stderr.write(`[cco] MCP server ready\n`)
+
+  // Run indexing and watcher in the background after MCP is connected
+  setImmediate(async () => {
+    process.stderr.write(`[cco] checking for changes...\n`)
+    setIndexing(true)
+    try {
+      const { indexed, skipped, removed, failed } = await indexProject(db, {
+        projectRoot,
+        embeddings: config.embeddings,
+        extensions: config.extensions,
+        ignore: config.ignore,
+        onProgress: (current, total, file) => {
+          process.stderr.write(`[cco] indexing ${current}/${total}: ${file}\n`)
+        },
+      })
+      process.stderr.write(`[cco] done. indexed=${indexed} skipped=${skipped} removed=${removed} failed=${failed}\n`)
+      if (failed > 0) {
+        process.stderr.write(`[cco] WARNING: ${failed} file(s) failed to index — see errors above. Will retry on next startup.\n`)
+      }
+      emitActivity({ ts: Date.now(), type: 'startup', file: `indexed=${indexed} skipped=${skipped} removed=${removed} failed=${failed}` })
+    } catch (err) {
+      process.stderr.write(`[cco] indexing failed, continuing without index: ${err}\n`)
+      emitActivity({ ts: Date.now(), type: 'startup', file: 'indexing failed' })
+    } finally {
+      setIndexing(false)
+    }
+
+    startWatcher(db, {
+      projectRoot,
+      embeddings: config.embeddings,
+      extensions: config.extensions,
+      ignore: config.ignore,
+      onActivity: emitActivity,
+    })
+  })
 }
 
 main().catch(err => {

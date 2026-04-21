@@ -21,13 +21,18 @@ import {
 // File extensions to index
 const DEFAULT_EXTENSIONS = [
   'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs',
-  'php', 'blade.php',
+  'php',
   'svelte', 'vue',
   'py', 'rb', 'go', 'rs',
   'css', 'scss',
-  'json', 'yaml', 'yml', 'env.example',
+  'json', 'env.example',
   'md', 'mdx',
   'sql',
+]
+
+// Extra glob patterns that can't be expressed as simple extensions
+const EXTRA_PATTERNS = [
+  '**/*.blade.php',
 ]
 
 // Directories always ignored
@@ -110,18 +115,18 @@ export async function removeFile(
 export async function indexProject(
   db: Database.Database,
   config: IndexerConfig
-): Promise<{ indexed: number; skipped: number; removed: number }> {
+): Promise<{ indexed: number; skipped: number; removed: number; failed: number }> {
   const extensions = config.extensions ?? DEFAULT_EXTENSIONS
   const ignore = [...DEFAULT_IGNORE, ...(config.ignore ?? [])]
 
   // Find all indexable files
   const pattern = `**/*.{${extensions.join(',')}}`
-  const files = await glob(pattern, {
-    cwd: config.projectRoot,
-    ignore,
-    absolute: true,
-    nodir: true,
-  })
+  const globOpts = { cwd: config.projectRoot, ignore, absolute: true, nodir: true }
+  const results = await Promise.all([
+    glob(pattern, globOpts),
+    ...EXTRA_PATTERNS.map(p => glob(p, globOpts)),
+  ])
+  const files = [...new Set(results.flat())]
 
   // Find files that were removed since last index
   const knownHashes = getAllFileHashes(db)
@@ -138,23 +143,29 @@ export async function indexProject(
   // Index new/changed files
   let indexed = 0
   let skipped = 0
+  let failed = 0
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     const relPath = path.relative(config.projectRoot, file)
     config.onProgress?.(i + 1, files.length, relPath)
 
-    const content = fs.readFileSync(file, 'utf-8')
-    const hash = hashFile(content)
-    const existingHash = getFileHash(db, relPath)
+    try {
+      const content = fs.readFileSync(file, 'utf-8')
+      const hash = hashFile(content)
+      const existingHash = getFileHash(db, relPath)
 
-    if (existingHash === hash) {
-      skipped++
-      continue
+      if (existingHash === hash) {
+        skipped++
+        continue
+      }
+
+      await indexFile(db, file, config.projectRoot, config)
+      indexed++
+    } catch (err) {
+      failed++
+      process.stderr.write(`[cco] failed to index ${relPath}: ${err instanceof Error ? err.message : err}\n`)
     }
-
-    await indexFile(db, file, config.projectRoot, config)
-    indexed++
   }
 
-  return { indexed, skipped, removed }
+  return { indexed, skipped, removed, failed }
 }

@@ -1,8 +1,9 @@
-import { execSync } from 'child_process'
+import { execSync, exec } from 'child_process'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
 import readline from 'readline'
+import { dashboardFallbackPort } from '../utils/port.js'
 
 function ask(question: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
@@ -101,6 +102,10 @@ async function runInit() {
   fs.writeFileSync(homePath, JSON.stringify(claudeJson, null, 2) + '\n')
   console.log(`✅ Registered MCP server in ~/.claude.json for this project`)
 
+  const dashboardNote = enableDashboard
+    ? `🌐 Dashboard will be served at: http://localhost:3333 (falls back to ${dashboardFallbackPort(projectRoot)} if 3333 is busy)\n   Run: claude-context-optimizer dashboard`
+    : `ℹ️  Dashboard disabled`
+
   console.log(`
 🎉 Done! Next steps:
    1. Make sure Ollama is running:  ollama serve
@@ -109,6 +114,7 @@ async function runInit() {
 
 📁 Index will be stored in: .claude-context/index.db
 ⚙️  Config at: .claude-context/config.json
+${dashboardNote}
 `)
 }
 
@@ -119,13 +125,24 @@ if (command === 'init') {
   const serverPath = path.resolve(packageRoot, 'dist', 'mcp', 'server.js')
   execSync(`node ${serverPath} --project ${projectRoot}`, { stdio: 'inherit' })
 
+} else if (command === 'dashboard') {
+  const portFile = path.join(projectRoot, '.claude-context', 'dashboard.port')
+  const port = fs.existsSync(portFile) ? Number(fs.readFileSync(portFile, 'utf-8').trim()) : 3333
+  const url = `http://localhost:${port}`
+  console.log(`Opening dashboard at ${url}`)
+  const opener =
+    process.platform === 'darwin' ? 'open' :
+    process.platform === 'win32' ? 'start' : 'xdg-open'
+  exec(`${opener} ${url}`)
+
 } else {
   console.log(`
 claude-context-optimizer — semantic codebase search for Claude Code
 
 Usage:
-  claude-context-optimizer init     Set up this project (run once)
-  claude-context-optimizer start    Start the MCP server manually (for testing)
+  claude-context-optimizer init       Set up this project (run once)
+  claude-context-optimizer start      Start the MCP server manually (for testing)
+  claude-context-optimizer dashboard  Open the dashboard in your browser
 
 GitHub: https://github.com/your-username/claude-context-optimizer
 `)
