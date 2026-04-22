@@ -483,6 +483,36 @@ main {
   margin-left: auto;
 }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.page-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.page-btn:hover:not(:disabled) { background: var(--accent-dim); }
+.page-btn:disabled { opacity: 0.35; cursor: default; }
+.page-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+.page-info {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-left: auto;
+}
+
 table { width: 100%; border-collapse: collapse; }
 
 th {

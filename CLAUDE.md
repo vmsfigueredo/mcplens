@@ -79,7 +79,14 @@ Target project's `.mcplens/config.json`:
 Switch to OpenAI by changing `provider` to `"openai"` and adding `"openaiApiKey"`.
 
 ## Context Search
-Always use MCP tools before reading files:
-- search_code() — for any query, conceptual or exact (hybrid BM25 + semantic)
-- get_symbol() — only when search_code returns no results for an exact name
-Only read full files if both tools return insufficient context.
+
+**MANDATORY — follow these rules before touching any file:**
+
+1. ALWAYS call `search_code()` first for any query, conceptual or exact.
+   Examples: "how does authentication work", "where is the payment logic", "UserService"
+2. Use `get_symbol()` only when `search_code()` returns no results for an exact name.
+3. Reading files directly (without first searching) is NOT allowed.
+   Only open a full file if both tools returned insufficient context.
+4. Never browse the file tree to find things — use `search_code()` instead.
+
+This rule exists to reduce token usage. Violating it defeats the purpose of mcplens.

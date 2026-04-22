@@ -1,0 +1,11 @@
+src/
+coverage/
+*.test.ts
+**/*.test.js
+vitest.config.ts
+tsconfig.json
+CLAUDE.md
+INSTALL.md
+PLANO.md
+NPM_PUBLISH.md
+.mcplens/

@@ -50,19 +50,35 @@ async function runInit() {
 
   // 2. Create or update CLAUDE.md with context search instructions
   const claudeMdPath = path.join(projectRoot, 'CLAUDE.md')
+  const MCPLENS_MARKER = '<!-- mcplens-context-block -->'
   const contextBlock = `
+${MCPLENS_MARKER}
 ## Context Search (mcplens)
-- Use search_code() for conceptual queries ("how does payment work")
-- Use get_symbol() for exact lookups ("find PaymentService class")
-- Only read full files if both tools return insufficient context
+
+**MANDATORY — follow these rules before touching any file:**
+
+1. ALWAYS call \`search_code()\` first for any query, conceptual or exact.
+   Examples: "how does authentication work", "where is the payment logic", "UserService"
+2. Use \`get_symbol()\` only when \`search_code()\` returns no results for an exact name.
+3. Reading files directly (without first searching) is NOT allowed.
+   Only open a full file if both tools returned insufficient context.
+4. Never browse the file tree to find things — use \`search_code()\` instead.
+
+This rule exists to reduce token usage. Violating it defeats the purpose of mcplens.
 `
   if (fs.existsSync(claudeMdPath)) {
     const content = fs.readFileSync(claudeMdPath, 'utf-8')
-    if (!content.includes('mcplens')) {
-      fs.appendFileSync(claudeMdPath, contextBlock)
-      console.log('✅ Updated CLAUDE.md with context search instructions')
+    if (content.includes(MCPLENS_MARKER)) {
+      // Replace the existing block between the marker and the next ## heading (or EOF)
+      const updated = content.replace(
+        new RegExp(`${MCPLENS_MARKER}[\\s\\S]*?(?=\\n## |$)`),
+        contextBlock.trimEnd()
+      )
+      fs.writeFileSync(claudeMdPath, updated)
+      console.log('✅ Updated mcplens block in CLAUDE.md')
     } else {
-      console.log('ℹ️  CLAUDE.md already has context search instructions')
+      fs.appendFileSync(claudeMdPath, contextBlock)
+      console.log('✅ Appended context search instructions to CLAUDE.md')
     }
   } else {
     fs.writeFileSync(claudeMdPath, contextBlock.trimStart())

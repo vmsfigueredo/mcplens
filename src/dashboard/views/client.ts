@@ -5,18 +5,71 @@ function switchTab(id, btn) {
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'))
   document.getElementById('tab-' + id).classList.add('active')
   btn.classList.add('active')
+  if (id === 'files') _filesInit()
 }
 
-function filterFiles() {
+// ── FILES PAGINATION ───────────────────────────────────
+const FILES_PER_PAGE = 50
+let _filesPage = 0
+let _filesFiltered = []
+
+function _filesInit() {
+  _filesFiltered = window.__files || []
+  _filesPage = 0
+  _filesRender()
+}
+
+function filesFilterChange() {
   const q = document.getElementById('file-filter').value.toLowerCase()
-  const rows = document.querySelectorAll('#files-tbody tr')
-  let visible = 0
-  rows.forEach(r => {
-    const match = !q || r.dataset.path.includes(q)
-    r.style.display = match ? '' : 'none'
-    if (match) visible++
-  })
-  document.getElementById('file-count').textContent = visible + ' files'
+  _filesFiltered = (window.__files || []).filter(f => !q || f.p.toLowerCase().includes(q))
+  _filesPage = 0
+  _filesRender()
+}
+
+function _filesRender() {
+  const tbody = document.getElementById('files-tbody')
+  const pagination = document.getElementById('files-pagination')
+  const total = _filesFiltered.length
+  const totalPages = Math.max(1, Math.ceil(total / FILES_PER_PAGE))
+  if (_filesPage >= totalPages) _filesPage = totalPages - 1
+
+  const start = _filesPage * FILES_PER_PAGE
+  const slice = _filesFiltered.slice(start, start + FILES_PER_PAGE)
+
+  tbody.innerHTML = slice.map(f =>
+    \`<tr class="file-row" data-path="\${escHtml(f.p.toLowerCase())}">
+      <td class="filepath">\${escHtml(f.p)}</td>
+      <td class="chunks-cell">\${f.c}</td>
+      <td class="date-cell">\${escHtml(f.t)}</td>
+    </tr>\`
+  ).join('')
+
+  document.getElementById('file-count').textContent = total + ' files'
+
+  if (totalPages <= 1) {
+    pagination.innerHTML = ''
+    return
+  }
+
+  const showing = \`<span class="page-info">showing \${start + 1}–\${Math.min(start + FILES_PER_PAGE, total)} of \${total}</span>\`
+  const prev = _filesPage > 0
+    ? \`<button class="page-btn" onclick="_filesGo(\${_filesPage - 1})">← prev</button>\`
+    : \`<button class="page-btn" disabled>← prev</button>\`
+  const next = _filesPage < totalPages - 1
+    ? \`<button class="page-btn" onclick="_filesGo(\${_filesPage + 1})">next →</button>\`
+    : \`<button class="page-btn" disabled>next →</button>\`
+  const pages = Array.from({ length: totalPages }, (_, i) => {
+    const active = i === _filesPage ? ' active' : ''
+    return \`<button class="page-btn page-num\${active}" onclick="_filesGo(\${i})">\${i + 1}</button>\`
+  }).join('')
+
+  pagination.innerHTML = \`\${prev}\${pages}\${next}\${showing}\`
+}
+
+function _filesGo(page) {
+  _filesPage = page
+  _filesRender()
+  document.getElementById('tab-files').querySelector('.table-wrap').scrollTop = 0
 }
 
 // SSE

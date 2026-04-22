@@ -1,13 +1,41 @@
 {
-  "name": "mcplens",
-  "version": "0.1.0",
+  "name": "@vmsfigueredo/mcplens",
+  "version": "0.1.1",
   "description": "Local MCP server that gives AI coding assistants semantic search over your codebase using embeddings",
   "type": "module",
+  "main": "./dist/mcp/server.js",
   "bin": {
-    "mcplens": "./bin/cli.js"
+    "mcplens": "bin/cli.js"
   },
+  "files": [
+    "dist/**/*.js",
+    "!dist/**/*.test.js",
+    "bin/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "semantic-search",
+    "claude",
+    "claude-code",
+    "embeddings",
+    "ollama",
+    "codebase",
+    "ai"
+  ],
+  "author": "Vitor Figueredo <me@vitorfigueredo.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vmsfigueredo/mcplens.git"
+  },
+  "homepage": "https://github.com/vmsfigueredo/mcplens#readme",
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "dev": "node --watch dist/mcp/server.js",
     "start": "node dist/mcp/server.js",
     "test": "vitest run",
@@ -20,17 +48,17 @@
     "chokidar": "^3.6.0",
     "glob": "^11.0.0",
     "ignore": "^5.3.1",
-    "tree-sitter": "^0.25.0",
-    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter": "^0.22.4",
+    "tree-sitter-javascript": "^0.23.1",
     "tree-sitter-php": "^0.24.2",
-    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-python": "^0.23.6",
     "tree-sitter-typescript": "^0.23.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^20.0.0",
-    "@vitest/coverage-v8": "^2.0.0",
+    "@vitest/coverage-v8": "^3.0.0",
     "typescript": "^5.4.0",
-    "vitest": "^2.0.0"
+    "vitest": "^3.0.0"
   }
 }

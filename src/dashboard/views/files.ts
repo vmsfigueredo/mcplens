@@ -7,23 +7,25 @@ interface FileRow {
 }
 
 export function renderFilesTab(files: FileRow[]): string {
-  const rows = files.map(f => `<tr class="file-row" data-path="${escHtml(f.filepath.toLowerCase())}">
-    <td class="filepath">${escHtml(f.filepath)}</td>
-    <td class="chunks-cell">${f.chunk_count}</td>
-    <td class="date-cell">${new Date(f.indexed_at).toLocaleString()}</td>
-  </tr>`).join('')
+  const filesJson = JSON.stringify(files.map(f => ({
+    p: f.filepath,
+    c: f.chunk_count,
+    t: new Date(f.indexed_at).toLocaleString(),
+  })))
 
   return `
   <div id="tab-files" class="tab">
+    <script>window.__files = ${filesJson}</script>
     <div class="table-wrap">
       <div class="table-toolbar">
-        <input class="table-filter" id="file-filter" type="text" placeholder="filter files…" oninput="filterFiles()" />
+        <input class="table-filter" id="file-filter" type="text" placeholder="filter files…" oninput="filesFilterChange()" />
         <span class="table-count" id="file-count">${files.length} files</span>
       </div>
       <table>
         <thead><tr><th>File</th><th>Chunks</th><th>Indexed at</th></tr></thead>
-        <tbody id="files-tbody">${rows}</tbody>
+        <tbody id="files-tbody"></tbody>
       </table>
+      <div class="pagination" id="files-pagination"></div>
     </div>
 
     <div id="chunks-modal" class="modal" hidden>
