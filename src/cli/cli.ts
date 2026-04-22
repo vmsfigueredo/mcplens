@@ -36,9 +36,10 @@ ${MCPLENS_MARKER}
 1. ALWAYS call \`search_code()\` first for any query, conceptual or exact.
    Examples: "how does authentication work", "where is the payment logic", "UserService"
 2. Use \`get_symbol()\` only when \`search_code()\` returns no results for an exact name.
-3. Reading files directly (without first searching) is NOT allowed.
-   Only open a full file if both tools returned insufficient context.
-4. Never browse the file tree to find things — use \`search_code()\` instead.
+3. Use \`get_related(filepath)\` before any refactor, to understand blast radius.
+4. Reading files directly (without first searching) is NOT allowed.
+   Only open a full file if all three tools returned insufficient context.
+5. Never browse the file tree to find things — use \`search_code()\` instead.
 
 This rule exists to reduce token usage. Violating it defeats the purpose of mcplens.
 `
@@ -47,11 +48,24 @@ function writeInstructionsFile(filePath: string, label: string) {
   if (fs.existsSync(filePath)) {
     const content = fs.readFileSync(filePath, 'utf-8')
     if (content.includes(MCPLENS_MARKER)) {
-      const updated = content.replace(
-        new RegExp(`${MCPLENS_MARKER}[\\s\\S]*?(?=\\n## |$)`),
-        CONTEXT_BLOCK.trimEnd()
-      )
-      fs.writeFileSync(filePath, updated)
+      // Remove everything from the first marker to the end of the last mcplens block.
+      // Each block ends with the sentinel line "This rule exists to reduce token usage."
+      // Strip from the marker to that sentinel (inclusive), handling multiple occurrences.
+      const SENTINEL = 'This rule exists to reduce token usage. Violating it defeats the purpose of mcplens.'
+      const markerIdx = content.indexOf(MCPLENS_MARKER)
+      // Find the last occurrence of the sentinel after the marker
+      const lastSentinelEnd = content.lastIndexOf(SENTINEL)
+      let stripped: string
+      if (lastSentinelEnd !== -1 && lastSentinelEnd > markerIdx) {
+        // Cut from just before the marker to the end of the last sentinel line
+        const before = content.slice(0, markerIdx).trimEnd()
+        const after = content.slice(lastSentinelEnd + SENTINEL.length)
+        stripped = before + (after.startsWith('\n') ? after : '\n' + after)
+      } else {
+        // Fallback: just cut from marker to end
+        stripped = content.slice(0, markerIdx).trimEnd()
+      }
+      fs.writeFileSync(filePath, stripped.trimEnd() + CONTEXT_BLOCK)
       console.log(`✅ Updated mcplens block in ${label}`)
     } else {
       fs.appendFileSync(filePath, CONTEXT_BLOCK)
