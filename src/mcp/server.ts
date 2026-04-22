@@ -11,7 +11,7 @@ import { indexProject } from '../indexer/indexer.js'
 import { searchCode, getSymbol } from '../search/search.js'
 import { startWatcher } from '../watcher/watcher.js'
 import { loadConfig } from '../config/config.js'
-import { startDashboard, emitActivity, setIndexing, DashboardHandle } from '../dashboard/index.js'
+import { startDashboard, emitActivity, setIndexing, recordSearch, DashboardHandle } from '../dashboard/index.js'
 import { dashboardFallbackPort } from '../utils/port.js'
 import {
   readLockfile, writeLockfile, deleteLockfile,
@@ -56,6 +56,8 @@ async function detectExistingHost(): Promise<number | null> {
 async function runAsClient(hostPort: number) {
   process.stderr.write(`[mcplens] reusing existing instance at port ${hostPort}\n`)
 
+  const sessionId = `${path.basename(projectRoot)}#${process.pid.toString(36).slice(-4)}`
+
   await postSession(hostPort, 'register')
 
   // Heartbeat to keep host alive
@@ -77,7 +79,7 @@ async function runAsClient(hostPort: number) {
     },
     async ({ query, top_k }) => {
       try {
-        const results = await postSearch(hostPort, query, top_k ?? config.search?.topK, config.search?.minScore) as any[]
+        const results = await postSearch(hostPort, query, top_k ?? config.search?.topK, config.search?.minScore, sessionId) as any[]
         if (results.length === 0) {
           return { content: [{ type: 'text' as const, text: 'No relevant code found for this query.' }] }
         }
@@ -100,7 +102,7 @@ async function runAsClient(hostPort: number) {
     { name: z.string().describe('Exact name of the symbol (e.g. AsaasWebhookService, handlePayment)') },
     async ({ name }) => {
       try {
-        const results = await getSymbolHttp(hostPort, name) as any[]
+        const results = await getSymbolHttp(hostPort, name, sessionId) as any[]
         if (results.length === 0) {
           return { content: [{ type: 'text' as const, text: `Symbol "${name}" not found in index.` }] }
         }
@@ -236,6 +238,8 @@ async function runAsHost() {
   // Create MCP server
   const server = new McpServer({ name: 'mcplens', version: '0.1.0' })
 
+  const hostSessionId = `host#${process.pid.toString(36).slice(-4)}`
+
   server.tool(
     'search_code',
     'Search the codebase semantically. Use this before reading files to find the most relevant code for the current task.',
@@ -244,10 +248,12 @@ async function runAsHost() {
       top_k: z.number().optional().describe('Number of results to return (default: 5)'),
     },
     async ({ query, top_k }) => {
+      const t0 = Date.now()
       const results = await searchCode(db, query, config.embeddings, {
         topK: top_k ?? config.search?.topK,
         minScore: config.search?.minScore,
       })
+      recordSearch({ type: 'search', query, results: results.length, latencyMs: Date.now() - t0, sessionId: hostSessionId })
       if (results.length === 0) {
         return { content: [{ type: 'text' as const, text: 'No relevant code found for this query.' }] }
       }
@@ -266,7 +272,9 @@ async function runAsHost() {
     'Find the definition of a class, function, interface, or method by its exact name.',
     { name: z.string().describe('Exact name of the symbol (e.g. AsaasWebhookService, handlePayment)') },
     async ({ name }) => {
+      const t0 = Date.now()
       const results = getSymbol(db, name)
+      recordSearch({ type: 'symbol', query: name, results: results.length, latencyMs: Date.now() - t0, sessionId: hostSessionId })
       if (results.length === 0) {
         return { content: [{ type: 'text' as const, text: `Symbol "${name}" not found in index.` }] }
       }

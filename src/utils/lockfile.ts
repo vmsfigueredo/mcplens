@@ -80,15 +80,17 @@ export function postSession(port: number, action: 'register' | 'release' | 'hear
   })
 }
 
-export function postSearch(port: number, query: string, topK?: number, minScore?: number): Promise<unknown> {
+export function postSearch(port: number, query: string, topK?: number, minScore?: number, sessionId?: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ query, topK, minScore })
+    const headers: http.OutgoingHttpHeaders = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+    if (sessionId) headers['X-Mcplens-Session'] = sessionId
     const opts: http.RequestOptions = {
       hostname: '127.0.0.1',
       port,
       path: '/api/search',
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      headers,
     }
     const timeout = setTimeout(() => { req.destroy(); reject(new Error('timeout')) }, 10000)
     const req = http.request(opts, res => {
@@ -101,10 +103,12 @@ export function postSearch(port: number, query: string, topK?: number, minScore?
   })
 }
 
-export function getSymbolHttp(port: number, name: string): Promise<unknown> {
+export function getSymbolHttp(port: number, name: string, sessionId?: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => { req.destroy(); reject(new Error('timeout')) }, 5000)
-    const req = http.get(`http://127.0.0.1:${port}/api/symbol?name=${encodeURIComponent(name)}`, res => {
+    const headers: http.OutgoingHttpHeaders = {}
+    if (sessionId) headers['X-Mcplens-Session'] = sessionId
+    const req = http.get({ hostname: '127.0.0.1', port, path: `/api/symbol?name=${encodeURIComponent(name)}`, headers }, res => {
       let out = ''
       res.on('data', (d: Buffer) => { out += d.toString() })
       res.on('end', () => { clearTimeout(timeout); resolve(JSON.parse(out)) })

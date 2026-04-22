@@ -1,78 +1,136 @@
 # mcplens
 
-Local MCP server that gives AI coding assistants (Claude Code, Cursor, Windsurf) **semantic search** over your codebase.
+> Semantic codebase search for AI coding assistants — 70-85% token reduction, 100% local, zero cloud dependency.
 
-Instead of reading dozens of files by heuristic, your AI assistant calls `search_code("how does payment work?")` and gets back only the 5 most relevant chunks — saving tokens and improving response quality.
+AI coding assistants like Claude Code, Cursor, and Codex are powerful — but they have a fundamental problem: when you ask a question, they read files by guessing which ones are relevant based on path and filename heuristics. On a medium-sized project, a single query can consume 10,000–20,000 tokens of context just loading files that may not even be relevant.
+
+`claude-context-optimizer` solves this by giving your AI assistant **semantic search** over your codebase. Instead of reading files blindly, it calls `search_code("how does payment work?")` and gets back only the 5 most relevant code chunks — indexed locally using embeddings, stored in SQLite, zero data leaving your machine.
+
+---
 
 ## How it works
 
-1. On startup, indexes your codebase using [Ollama](https://ollama.ai) embeddings (100% local, free)
-2. Stores chunks + vectors in a local SQLite file (`.mcplens/index.db`)
-3. On subsequent startups, only re-indexes files that changed (delta by hash)
-4. Watches for file changes during your session and re-indexes in real time
-5. Exposes 3 tools to Claude Code via MCP stdio transport
-6. Serves a live dashboard at `http://localhost:3333`
+When you open your AI assistant in a project:
+
+1. The MCP server starts automatically (spawned via stdio by the assistant)
+2. It compares file hashes against the last index and **re-indexes only what changed** (delta indexing)
+3. A file watcher keeps the index in sync as you code
+4. Your assistant now has access to 3 semantic search tools instead of reading raw files
+
+```
+You ask: "how does the Asaas webhook work?"
+
+Without cco:                          With cco:
+  Read AsaasWebhookController.php       search_code("asaas webhook")
+  Read AsaasWebhookService.php          → returns 5 relevant chunks
+  Read PaymentService.php               → ~800 tokens total
+  Read BillingModule.php
+  Read ...8 more files
+  → ~15,000 tokens total
+```
+
+### Under the hood
+
+* **Embeddings:**[Ollama](https://ollama.ai/) with `nomic-embed-text` (768-dim) — 100% local, free, no API key
+* **Vector store:** SQLite with cosine similarity computed in-process — no extra infrastructure
+* **Chunking:** AST-aware via `tree-sitter` (splits by function/class) with sliding window fallback
+* **Transport:** MCP stdio — the assistant spawns the process and communicates via pipe
+* **Persistence:** Index lives in `.claude-context/index.db` and survives between sessions
+
+---
+
+## Compatibility
+
+`claude-context-optimizer` works with **any MCP-compatible AI coding assistant**. MCP (Model Context Protocol) is an open standard — the same server works across all clients without modification.
+
+
+| Assistant      | Status | Config location                       |
+| -------------- | ------ | ------------------------------------- |
+| Claude Code    | ✅     | `~/.claude.json`                      |
+| Cursor         | ✅     | `.cursor/mcp.json`                    |
+| Windsurf       | ✅     | `~/.codeium/windsurf/mcp_config.json` |
+| Trae           | ✅     | `.vscode/settings.json`               |
+| Codex          | ✅     | MCP config (preview)                  |
+| Any MCP client | ✅     | Follows MCP stdio spec                |
+
+The `init` command detects which assistants you use and registers the server automatically in the right place.
+
+---
+
+## Token savings
+
+The index lives locally. The assistant fetches only what's relevant. The numbers speak for themselves:
+
+
+| Project size | Without cco         | With cco            | Savings   |
+| ------------ | ------------------- | ------------------- | --------- |
+| \~200 files  | \~5k tokens/query   | \~1.2k tokens/query | **\~75%** |
+| \~1000 files | \~10k tokens/query  | \~1.5k tokens/query | **\~85%** |
+| \~5000 files | \~20k+ tokens/query | \~2k tokens/query   | **\~90%** |
+
+These are context tokens — the portion you control. Savings scale with project size because larger projects trigger more heuristic file reads by default.
+
+---
 
 ## Tools exposed
 
-| Tool | What it does |
-|---|---|
-| `search_code(query)` | Semantic search — finds the most relevant chunks for a natural language query |
-| `get_symbol(name)` | Exact lookup of a class, function, or interface by name |
-| `index_status` | Shows how many files/chunks are indexed |
 
-## Requirements
+| Tool                 | When to use                                                                      |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `search_code(query)` | Conceptual queries:*"how does billing work"*,*"where is authentication handled"* |
+| `get_symbol(name)`   | Exact lookups:*"find PaymentService"*,*"where is handleWebhook defined"*         |
+| `index_status`       | Debug: how many files and chunks are currently indexed                           |
 
-- Node.js 20+
-- [Ollama](https://ollama.ai) installed and running
+Add this to your project's `CLAUDE.md` (or equivalent) to guide the assistant:
 
-## Setup
+```markdown
+## Context Search
+Always use MCP tools before reading files:
+- search_code() — for conceptual or natural language queries
+- get_symbol() — for exact class/function/method lookups
+Only read full files if both tools return insufficient context.
+```
+
+---
+
+## Installation options
+
+### Option A — npm (requires Ollama)
+
+Zero overhead. Best for developers who already have Ollama installed.
 
 ```bash
-# 1. Install globally
-npm install -g mcplens
-
-# 2. Pull the embedding model (one-time, ~270MB)
-ollama pull nomic-embed-text
-
-# 3. Initialize in your project — this configures everything automatically
-cd your-project
-mcplens init
-
-# 4. Open your AI coding assistant — done.
+npm install -g claude-context-optimizer
+ollama pull nomic-embed-text:latest
+cd your-project && claude-context-optimizer init
 ```
 
-**That's it.** `init` writes the config, updates `.gitignore`, and registers the MCP server in your chosen AI coding assistant configs (Claude Code, Cursor, Windsurf — you pick during init). No manual JSON editing required.
+See [INSTALL.md](https://claude.ai/chat/INSTALL.md) for full setup instructions.
 
-When your AI coding assistant opens, the MCP server starts in the background, indexes your codebase (or skips unchanged files), and begins watching for changes in real time.
+### Option B — Docker (zero dependencies beyond Docker)
 
-## Dashboard
+Everything bundled: Node, Ollama, and the embedding model. One command and you're done.
 
-While Claude Code is running, the dashboard is available at:
-
+```bash
+curl -o ~/.cco/docker-compose.yml https://raw.githubusercontent.com/your-user/claude-context-optimizer/main/docker/docker-compose.yml
+docker compose -f ~/.cco/docker-compose.yml up -d
+cd your-project && claude-context-optimizer init --docker
 ```
-http://localhost:3333
-```
 
-| Tab | What it shows |
-|---|---|
-| **Overview** | Files indexed, total chunks, index size on disk, last indexed time |
-| **Activity** | Live feed of file re-index events via SSE (updates without refresh) |
-| **Search** | Test semantic queries and see similarity scores — useful for tuning `minScore` and `topK` |
-| **Files** | Full list of indexed files with chunk count and last indexed timestamp |
+Docker image size: \~1.5GB (Ollama \~1GB + model \~270MB + Node \~200MB).
 
-The dashboard runs on `:3333` to avoid conflicts with common dev servers (`:3000`, `:8080`, etc).
+---
 
 ## Configuration
 
-Edit `.mcplens/config.json` to customize:
+`.claude-context/config.json` is created automatically by `init`. Edit it to customize behavior:
 
 ```json
 {
   "embeddings": {
     "provider": "ollama",
     "ollamaUrl": "http://localhost:11434",
-    "ollamaModel": "nomic-embed-text"
+    "ollamaModel": "nomic-embed-text:latest"
   },
   "search": {
     "topK": 5,
@@ -84,7 +142,7 @@ Edit `.mcplens/config.json` to customize:
 }
 ```
 
-### Using OpenAI instead of Ollama
+To use OpenAI embeddings instead:
 
 ```json
 {
@@ -96,21 +154,343 @@ Edit `.mcplens/config.json` to customize:
 }
 ```
 
+---
+
 ## What gets indexed
 
-By default: `.ts .tsx .js .jsx .php .svelte .vue .py .rb .go .rs .css .scss .json .yaml .md .sql`
+**Included by default:**`.ts .tsx .js .jsx .mjs .php .svelte .vue .py .rb .go .rs .css .scss .json .yaml .yml .md .sql`
 
-Ignored by default: `node_modules`, `.git`, `vendor`, `dist`, `build`, `.next`
+**Ignored by default:**`node_modules`, `.git`, `vendor`, `dist`, `build`, `.next`, `.claude-context`
 
-## Index size
+The `.claude-context/` directory is automatically added to `.gitignore`.
 
-| Project size | Approx index size |
-|---|---|
-| ~200 files | ~15 MB |
-| ~1000 files | ~70 MB |
-| ~5000 files | ~350 MB |
+### Index size reference
 
-The `.mcplens/` directory is automatically added to `.gitignore`.
+
+| Project | Files        | Approx size |
+| ------- | ------------ | ----------- |
+| Small   | \~200 files  | \~15 MB     |
+| Medium  | \~1000 files | \~70 MB     |
+| Large   | \~5000 files | \~350 MB    |
+
+---
+
+## Dashboard
+
+A lightweight web dashboard is available at `http://localhost:3000` while the server is running:
+
+* **Overview** — files indexed, chunks, index size, Ollama status
+* **Activity** — live feed of re-indexing events
+* **Search** — test queries manually and see scores (useful for calibrating `minScore`)
+* **Files** — full list of indexed files with chunk counts
+
+The dashboard runs on port `3333` by default. If that port is already taken (e.g. two projects open simultaneously), the port is automatically calculated from the project name. To open:
+
+```bash
+mcplens dashboard
+```
+
+To disable: add `--no-dashboard` to the server args in your MCP config.
+
+---
+
+## Privacy
+
+Everything runs on your machine:
+
+* Embeddings are generated locally via Ollama — your code never leaves
+* The index is stored in `.claude-context/index.db` in your project
+* No telemetry, no analytics, no accounts
+
+> ⚠️ If you use the OpenAI embeddings option, chunks are sent to OpenAI's API.
+
+---
+
+## Why not just use existing tools?
+
+
+| Tool                         | Language    | Fully local?                      | Install friction                     |
+| ---------------------------- | ----------- | --------------------------------- | ------------------------------------ |
+| `claude-context`(Zilliz)     | TypeScript  | ❌ requires Zilliz Cloud + OpenAI | Medium                               |
+| `claude-context-local`       | Python      | ✅                                | High (torch, FAISS, pipx)            |
+| `cocoindex-code`             | Python      | ✅                                | Medium (pipx, sentence-transformers) |
+| `codegraph`                  | Rust        | ✅                                | High (must compile Rust)             |
+| **claude-context-optimizer** | **Node.js** | **✅**                            | **Low (`npm install -g`)**           |
+
+The goal is to be the **most accessible option for JS/TS developers** — not the most feature-complete. If you already have Node.js, you're one command away.
+
+---
+
+## Roadmap
+
+* [X]  AST-based chunking via tree-sitter
+* [X]  Delta indexing by file hash
+* [X]  Real-time file watcher
+* [X]  Dashboard
+* [X]  Multi-client init (Claude Code, Cursor, Windsurf, Trae)
+* [ ]  Docker option with bundled Ollama
+* [ ]  Contextual retrieval (LLM-generated chunk summaries)
+* [ ]  Hybrid search (BM25 + semantic)
+* [ ]  Token usage analytics via Claude Code hooks
+
+---
+
+## Contributing
+
+PRs welcome. See [INSTALL.md](https://claude.ai/chat/INSTALL.md) for local development setup.
+
+## Built with
+
+This project was built using Claude Code — which is exactly why it exists.
+
+## License
+
+MIT
+
+# mcplens
+
+> Semantic codebase search for AI coding assistants — 70-85% token reduction, 100% local, zero cloud dependency.
+
+AI coding assistants like Claude Code, Cursor, and Codex are powerful — but they have a fundamental problem: when you ask a question, they read files by guessing which ones are relevant based on path and filename heuristics. On a medium-sized project, a single query can consume 10,000–20,000 tokens of context just loading files that may not even be relevant.
+
+`claude-context-optimizer` solves this by giving your AI assistant **semantic search** over your codebase. Instead of reading files blindly, it calls `search_code("how does payment work?")` and gets back only the 5 most relevant code chunks — indexed locally using embeddings, stored in SQLite, zero data leaving your machine.
+
+---
+
+## How it works
+
+When you open your AI assistant in a project:
+
+1. The MCP server starts automatically (spawned via stdio by the assistant)
+2. It compares file hashes against the last index and **re-indexes only what changed** (delta indexing)
+3. A file watcher keeps the index in sync as you code
+4. Your assistant now has access to 3 semantic search tools instead of reading raw files
+
+```
+You ask: "how does the Asaas webhook work?"
+
+Without cco:                          With cco:
+  Read AsaasWebhookController.php       search_code("asaas webhook")
+  Read AsaasWebhookService.php          → returns 5 relevant chunks
+  Read PaymentService.php               → ~800 tokens total
+  Read BillingModule.php
+  Read ...8 more files
+  → ~15,000 tokens total
+```
+
+### Under the hood
+
+* **Embeddings:**[Ollama](https://ollama.ai/) with `nomic-embed-text` (768-dim) — 100% local, free, no API key
+* **Vector store:** SQLite with cosine similarity computed in-process — no extra infrastructure
+* **Chunking:** AST-aware via `tree-sitter` (splits by function/class) with sliding window fallback
+* **Transport:** MCP stdio — the assistant spawns the process and communicates via pipe
+* **Persistence:** Index lives in `.claude-context/index.db` and survives between sessions
+
+---
+
+## Compatibility
+
+`claude-context-optimizer` works with **any MCP-compatible AI coding assistant**. MCP (Model Context Protocol) is an open standard — the same server works across all clients without modification.
+
+
+| Assistant      | Status | Config location                       |
+| -------------- | ------ | ------------------------------------- |
+| Claude Code    | ✅     | `~/.claude.json`                      |
+| Cursor         | ✅     | `.cursor/mcp.json`                    |
+| Windsurf       | ✅     | `~/.codeium/windsurf/mcp_config.json` |
+| Trae           | ✅     | `.vscode/settings.json`               |
+| Codex          | ✅     | MCP config (preview)                  |
+| Any MCP client | ✅     | Follows MCP stdio spec                |
+
+The `init` command detects which assistants you use and registers the server automatically in the right place.
+
+---
+
+## Token savings
+
+The index lives locally. The assistant fetches only what's relevant. The numbers speak for themselves:
+
+
+| Project size | Without cco         | With cco            | Savings   |
+| ------------ | ------------------- | ------------------- | --------- |
+| \~200 files  | \~5k tokens/query   | \~1.2k tokens/query | **\~75%** |
+| \~1000 files | \~10k tokens/query  | \~1.5k tokens/query | **\~85%** |
+| \~5000 files | \~20k+ tokens/query | \~2k tokens/query   | **\~90%** |
+
+These are context tokens — the portion you control. Savings scale with project size because larger projects trigger more heuristic file reads by default.
+
+---
+
+## Tools exposed
+
+
+| Tool                 | When to use                                                                      |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `search_code(query)` | Conceptual queries:*"how does billing work"*,*"where is authentication handled"* |
+| `get_symbol(name)`   | Exact lookups:*"find PaymentService"*,*"where is handleWebhook defined"*         |
+| `index_status`       | Debug: how many files and chunks are currently indexed                           |
+
+Add this to your project's `CLAUDE.md` (or equivalent) to guide the assistant:
+
+```markdown
+## Context Search
+Always use MCP tools before reading files:
+- search_code() — for conceptual or natural language queries
+- get_symbol() — for exact class/function/method lookups
+Only read full files if both tools return insufficient context.
+```
+
+---
+
+## Installation options
+
+### Option A — npm (requires Ollama)
+
+Zero overhead. Best for developers who already have Ollama installed.
+
+```bash
+npm install -g claude-context-optimizer
+ollama pull nomic-embed-text:latest
+cd your-project && claude-context-optimizer init
+```
+
+See [INSTALL.md](https://claude.ai/chat/INSTALL.md) for full setup instructions.
+
+### Option B — Docker (zero dependencies beyond Docker)
+
+Everything bundled: Node, Ollama, and the embedding model. One command and you're done.
+
+```bash
+curl -o ~/.cco/docker-compose.yml https://raw.githubusercontent.com/your-user/claude-context-optimizer/main/docker/docker-compose.yml
+docker compose -f ~/.cco/docker-compose.yml up -d
+cd your-project && claude-context-optimizer init --docker
+```
+
+Docker image size: \~1.5GB (Ollama \~1GB + model \~270MB + Node \~200MB).
+
+---
+
+## Configuration
+
+`.claude-context/config.json` is created automatically by `init`. Edit it to customize behavior:
+
+```json
+{
+  "embeddings": {
+    "provider": "ollama",
+    "ollamaUrl": "http://localhost:11434",
+    "ollamaModel": "nomic-embed-text:latest"
+  },
+  "search": {
+    "topK": 5,
+    "minScore": 0.3
+  },
+  "ignore": [
+    "**/tests/fixtures/**"
+  ]
+}
+```
+
+To use OpenAI embeddings instead:
+
+```json
+{
+  "embeddings": {
+    "provider": "openai",
+    "openaiApiKey": "sk-...",
+    "openaiModel": "text-embedding-3-small"
+  }
+}
+```
+
+---
+
+## What gets indexed
+
+**Included by default:**`.ts .tsx .js .jsx .mjs .php .svelte .vue .py .rb .go .rs .css .scss .json .yaml .yml .md .sql`
+
+**Ignored by default:**`node_modules`, `.git`, `vendor`, `dist`, `build`, `.next`, `.claude-context`
+
+The `.claude-context/` directory is automatically added to `.gitignore`.
+
+### Index size reference
+
+
+| Project | Files        | Approx size |
+| ------- | ------------ | ----------- |
+| Small   | \~200 files  | \~15 MB     |
+| Medium  | \~1000 files | \~70 MB     |
+| Large   | \~5000 files | \~350 MB    |
+
+---
+
+## Dashboard
+
+A lightweight web dashboard is available at `http://localhost:3000` while the server is running:
+
+* **Overview** — files indexed, chunks, index size, Ollama status
+* **Activity** — live feed of re-indexing events
+* **Search** — test queries manually and see scores (useful for calibrating `minScore`)
+* **Files** — full list of indexed files with chunk counts
+
+The dashboard runs on port `3333` by default. If that port is already taken (e.g. two projects open simultaneously), the port is automatically calculated from the project name. To open:
+
+```bash
+mcplens dashboard
+```
+
+To disable: add `--no-dashboard` to the server args in your MCP config.
+
+---
+
+## Privacy
+
+Everything runs on your machine:
+
+* Embeddings are generated locally via Ollama — your code never leaves
+* The index is stored in `.claude-context/index.db` in your project
+* No telemetry, no analytics, no accounts
+
+> ⚠️ If you use the OpenAI embeddings option, chunks are sent to OpenAI's API.
+
+---
+
+## Why not just use existing tools?
+
+
+| Tool                         | Language    | Fully local?                      | Install friction                     |
+| ---------------------------- | ----------- | --------------------------------- | ------------------------------------ |
+| `claude-context`(Zilliz)     | TypeScript  | ❌ requires Zilliz Cloud + OpenAI | Medium                               |
+| `claude-context-local`       | Python      | ✅                                | High (torch, FAISS, pipx)            |
+| `cocoindex-code`             | Python      | ✅                                | Medium (pipx, sentence-transformers) |
+| `codegraph`                  | Rust        | ✅                                | High (must compile Rust)             |
+| **claude-context-optimizer** | **Node.js** | **✅**                            | **Low (`npm install -g`)**           |
+
+The goal is to be the **most accessible option for JS/TS developers** — not the most feature-complete. If you already have Node.js, you're one command away.
+
+---
+
+## Roadmap
+
+* [X]  AST-based chunking via tree-sitter
+* [X]  Delta indexing by file hash
+* [X]  Real-time file watcher
+* [X]  Dashboard
+* [X]  Multi-client init (Claude Code, Cursor, Windsurf, Trae)
+* [ ]  Docker option with bundled Ollama
+* [ ]  Contextual retrieval (LLM-generated chunk summaries)
+* [ ]  Hybrid search (BM25 + semantic)
+* [ ]  Token usage analytics via Claude Code hooks
+
+---
+
+## Contributing
+
+PRs welcome. See [INSTALL.md](https://claude.ai/chat/INSTALL.md) for local development setup.
+
+## Built with
+
+This project was built using Claude Code — which is exactly why it exists.
 
 ## License
 

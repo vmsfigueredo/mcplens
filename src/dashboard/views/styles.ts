@@ -331,9 +331,15 @@ main {
 .badge.indexed  { background: rgba(168,201,127,0.1); color: var(--accent); }
 .badge.removed  { background: rgba(201,96,96,0.12);  color: var(--red);    }
 .badge.startup  { background: rgba(127,168,201,0.1); color: var(--blue);   }
+.badge.search   { background: rgba(201,160,90,0.12); color: var(--amber);  }
+.badge.symbol   { background: rgba(168,201,127,0.1); color: var(--accent); }
 
 .event .file { color: var(--text); word-break: break-all; }
 .event .chunks { color: var(--muted2); margin-left: 4px; }
+.event .query { color: var(--text); font-family: var(--mono); font-size: 0.8rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event .session-chip { font-size: 0.65rem; font-family: var(--sans); padding: 1px 5px; border-radius: 2px; background: var(--surface2); color: var(--muted2); border: 1px solid var(--border); flex-shrink: 0; }
+.event .result-count { color: var(--muted2); font-size: 0.72rem; flex-shrink: 0; white-space: nowrap; }
+.event .latency { color: var(--muted); font-size: 0.72rem; flex-shrink: 0; white-space: nowrap; }
 
 /* ── SEARCH ───────────────────────────────────────────── */
 .search-wrap {

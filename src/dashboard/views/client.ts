@@ -22,12 +22,24 @@ function filterFiles() {
 // SSE
 const feed = document.getElementById('activity-feed')
 const feedOverview = document.getElementById('activity-feed-overview')
+const searchesFeed = document.getElementById('searches-feed')
 const es = new EventSource('/events')
 
 es.onmessage = (e) => {
   const ev = JSON.parse(e.data)
   if (ev.type === '__indexing__') {
     document.getElementById('indexing-badge').classList.toggle('visible', ev.value)
+    return
+  }
+
+  const isSearchEvent = ev.type === 'search' || ev.type === 'symbol'
+
+  if (isSearchEvent) {
+    const placeholder = searchesFeed.querySelector('.empty-state')
+    if (placeholder) placeholder.remove()
+    const div = document.createElement('div')
+    div.innerHTML = eventHtmlStr(ev, true)
+    searchesFeed.insertBefore(div.firstElementChild, searchesFeed.firstChild)
     return
   }
 
@@ -68,10 +80,16 @@ es.onerror = () => {
 // Keep in sync with eventHtml() in events.ts
 function eventHtmlStr(ev, isNew) {
   const t = new Date(ev.ts).toLocaleTimeString()
+  const cls = isNew ? 'event event-new' : 'event'
+  if (ev.type === 'search' || ev.type === 'symbol') {
+    const latency = \`<span class="latency">\${ev.latencyMs}ms</span>\`
+    const session = \`<span class="session-chip">\${escHtml(ev.sessionId)}</span>\`
+    const count = \`<span class="result-count">\${ev.results} result\${ev.results !== 1 ? 's' : ''}</span>\`
+    return \`<div class="\${cls}"><span class="ts">\${t}</span><span class="badge \${ev.type}">\${ev.type}</span>\${session}<span class="query">\${escHtml(ev.query)}</span>\${count}\${latency}</div>\`
+  }
   const chunksHtml = ev.chunks !== undefined
     ? \`<span class="chunks">·\${ev.chunks} chunks</span>\`
     : ''
-  const cls = isNew ? 'event event-new' : 'event'
   return \`<div class="\${cls}"><span class="ts">\${t}</span><span class="badge \${ev.type}">\${ev.type}</span><span class="file">\${escHtml(ev.file)}\${chunksHtml}</span></div>\`
 }
 

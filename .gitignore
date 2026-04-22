@@ -19,5 +19,8 @@ dist/
 # project index
 .mcplens/
 
+# test coverage
+coverage/
+
 # claude code
 CLAUDE.md

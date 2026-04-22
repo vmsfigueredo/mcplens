@@ -4,6 +4,7 @@ import { getClientScript } from './client.js'
 import { renderOverviewTab } from './overview.js'
 import { renderActivityTab } from './activity.js'
 import { renderSearchTab } from './search.js'
+import { renderSearchesTab } from './searches.js'
 import { renderFilesTab } from './files.js'
 import { getStats, getFiles } from '../queries.js'
 import { activityLog, getIndexing } from '../events.js'
@@ -44,6 +45,7 @@ export function renderPage(db: Database.Database, projectRoot: string): string {
 <nav>
   <button class="active" onclick="switchTab('overview', this)">overview</button>
   <button onclick="switchTab('activity', this)">activity</button>
+  <button onclick="switchTab('searches', this)">searches</button>
   <button onclick="switchTab('search', this)">search</button>
   <button onclick="switchTab('files', this)">files</button>
 </nav>
@@ -51,6 +53,7 @@ export function renderPage(db: Database.Database, projectRoot: string): string {
 <main>
   ${renderOverviewTab(stats, activityLog)}
   ${renderActivityTab(activityLog)}
+  ${renderSearchesTab(activityLog)}
   ${renderSearchTab()}
   ${renderFilesTab(files)}
 </main>

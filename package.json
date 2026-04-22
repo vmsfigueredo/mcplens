@@ -9,7 +9,10 @@
   "scripts": {
     "build": "tsc",
     "dev": "node --watch dist/mcp/server.js",
-    "start": "node dist/mcp/server.js"
+    "start": "node dist/mcp/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
@@ -26,6 +29,8 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^20.0.0",
-    "typescript": "^5.4.0"
+    "@vitest/coverage-v8": "^2.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
   }
 }

@@ -45,6 +45,7 @@ const DEFAULT_IGNORE = [
   '**/.next/**',
   '**/.mcplens/**',
   '**/storage/logs/**',
+  '**/storage/framework/**',
   '**/bootstrap/cache/**',
 ]
 
