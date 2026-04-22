@@ -11,6 +11,7 @@ const DEBOUNCE_MS = 300
 
 export interface WatcherConfig extends IndexerConfig {
   onActivity?: (event: ActivityEvent) => void
+  onIndexChanged?: () => void
 }
 
 export function startWatcher(
@@ -47,6 +48,7 @@ export function startWatcher(
         const rel = path.relative(config.projectRoot, filepath)
         process.stderr.write(`[mcplens] re-indexed: ${rel}\n`)
         config.onActivity?.({ ts: Date.now(), type: 'indexed', file: rel })
+        config.onIndexChanged?.()
       } catch (err) {
         process.stderr.write(`[mcplens] error indexing ${filepath}: ${err}\n`)
       }
@@ -60,6 +62,7 @@ export function startWatcher(
     const rel = path.relative(config.projectRoot, filepath)
     process.stderr.write(`[mcplens] removed from index: ${rel}\n`)
     config.onActivity?.({ ts: Date.now(), type: 'removed', file: rel })
+    config.onIndexChanged?.()
   }
 
   watcher.on('change', handleChange)

@@ -78,7 +78,8 @@ Target project's `.mcplens/config.json`:
 
 Switch to OpenAI by changing `provider` to `"openai"` and adding `"openaiApiKey"`.
 
-## Context Search (mcplens)
-- Use search_code() for conceptual queries ("how does payment work")
-- Use get_symbol() for exact lookups ("find PaymentService class")
-- Only read full files if both tools return insufficient context
+## Context Search
+Always use MCP tools before reading files:
+- search_code() — for any query, conceptual or exact (hybrid BM25 + semantic)
+- get_symbol() — only when search_code returns no results for an exact name
+Only read full files if both tools return insufficient context.

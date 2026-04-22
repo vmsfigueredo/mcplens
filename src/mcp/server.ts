@@ -6,9 +6,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import path from 'path'
-import { openDatabase } from '../indexer/database.js'
+import { openDatabase, getAllChunks } from '../indexer/database.js'
 import { indexProject } from '../indexer/indexer.js'
 import { searchCode, getSymbol } from '../search/search.js'
+import { buildBM25Index, BM25Cache } from '../search/bm25.js'
 import { startWatcher } from '../watcher/watcher.js'
 import { loadConfig } from '../config/config.js'
 import { startDashboard, emitActivity, setIndexing, recordSearch, DashboardHandle } from '../dashboard/index.js'
@@ -72,7 +73,7 @@ async function runAsClient(hostPort: number) {
 
   server.tool(
     'search_code',
-    'Search the codebase semantically. Use this before reading files to find the most relevant code for the current task.',
+    'Search the codebase using hybrid semantic + keyword search. Use for both conceptual queries and exact symbol names.',
     {
       query: z.string().describe('Natural language description of what you are looking for'),
       top_k: z.number().optional().describe('Number of results to return (default: 5)'),
@@ -235,6 +236,13 @@ async function runAsHost() {
     }
   })
 
+  const bm25Cache = new BM25Cache()
+
+  function rebuildBM25(): void {
+    const chunks = getAllChunks(db).map(c => ({ id: c.id, content: c.content }))
+    bm25Cache.set(buildBM25Index(chunks))
+  }
+
   // Create MCP server
   const server = new McpServer({ name: 'mcplens', version: '0.1.0' })
 
@@ -242,7 +250,7 @@ async function runAsHost() {
 
   server.tool(
     'search_code',
-    'Search the codebase semantically. Use this before reading files to find the most relevant code for the current task.',
+    'Search the codebase using hybrid semantic + keyword search. Use for both conceptual queries and exact symbol names.',
     {
       query: z.string().describe('Natural language description of what you are looking for'),
       top_k: z.number().optional().describe('Number of results to return (default: 5)'),
@@ -252,7 +260,8 @@ async function runAsHost() {
       const results = await searchCode(db, query, config.embeddings, {
         topK: top_k ?? config.search?.topK,
         minScore: config.search?.minScore,
-      })
+        hybridAlpha: config.search?.hybridAlpha,
+      }, bm25Cache.get())
       recordSearch({ type: 'search', query, results: results.length, latencyMs: Date.now() - t0, sessionId: hostSessionId })
       if (results.length === 0) {
         return { content: [{ type: 'text' as const, text: 'No relevant code found for this query.' }] }
@@ -327,12 +336,17 @@ async function runAsHost() {
       setIndexing(false)
     }
 
+    // Build BM25 index once after initial indexing completes.
+    rebuildBM25()
+
     startWatcher(db, {
       projectRoot,
       embeddings: config.embeddings,
       extensions: config.extensions,
       ignore: config.ignore,
       onActivity: emitActivity,
+      // Rebuild eagerly after each file change — watcher already debounces (300ms).
+      onIndexChanged: rebuildBM25,
     })
   })
 }

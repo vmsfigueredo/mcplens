@@ -28,6 +28,7 @@ describe('loadConfig', () => {
     expect(cfg.embeddings.provider).toBe('ollama')
     expect(cfg.search?.topK).toBe(5)
     expect(cfg.search?.minScore).toBe(0.3)
+    expect(cfg.search?.hybridAlpha).toBe(0.3)
   })
 
   it('merges user config over defaults', () => {

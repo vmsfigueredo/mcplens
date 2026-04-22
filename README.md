@@ -2,9 +2,12 @@
 
 > Semantic codebase search for AI coding assistants — 70-85% token reduction, 100% local, zero cloud dependency.
 
-AI coding assistants like Claude Code, Cursor, and Codex are powerful — but they have a fundamental problem: when you ask a question, they read files by guessing which ones are relevant based on path and filename heuristics. On a medium-sized project, a single query can consume 10,000–20,000 tokens of context just loading files that may not even be relevant.
+AI coding assistants like Claude Code, Cursor, and Codex are powerful — but they have a fundamental problem: when you ask a question, they read files by guessing which ones are
+relevant based on path and filename heuristics. On a medium-sized project, a single query can consume 10,000–20,000 tokens of context just loading files that may not even be
+relevant.
 
-`claude-context-optimizer` solves this by giving your AI assistant **semantic search** over your codebase. Instead of reading files blindly, it calls `search_code("how does payment work?")` and gets back only the 5 most relevant code chunks — indexed locally using embeddings, stored in SQLite, zero data leaving your machine.
+`claude-context-optimizer` solves this by giving your AI assistant **semantic search** over your codebase. Instead of reading files blindly, it calls
+`search_code("how does payment work?")` and gets back only the 5 most relevant code chunks — indexed locally using embeddings, stored in SQLite, zero data leaving your machine.
 
 ---
 
@@ -41,17 +44,17 @@ Without cco:                          With cco:
 
 ## Compatibility
 
-`claude-context-optimizer` works with **any MCP-compatible AI coding assistant**. MCP (Model Context Protocol) is an open standard — the same server works across all clients without modification.
-
+`claude-context-optimizer` works with **any MCP-compatible AI coding assistant**. MCP (Model Context Protocol) is an open standard — the same server works across all clients
+without modification.
 
 | Assistant      | Status | Config location                       |
-| -------------- | ------ | ------------------------------------- |
-| Claude Code    | ✅     | `~/.claude.json`                      |
-| Cursor         | ✅     | `.cursor/mcp.json`                    |
-| Windsurf       | ✅     | `~/.codeium/windsurf/mcp_config.json` |
-| Trae           | ✅     | `.vscode/settings.json`               |
-| Codex          | ✅     | MCP config (preview)                  |
-| Any MCP client | ✅     | Follows MCP stdio spec                |
+|----------------|--------|---------------------------------------|
+| Claude Code    | ✅      | `~/.claude.json`                      |
+| Cursor         | ✅      | `.cursor/mcp.json`                    |
+| Windsurf       | ✅      | `~/.codeium/windsurf/mcp_config.json` |
+| Trae           | ✅      | `.vscode/settings.json`               |
+| Codex          | ✅      | MCP config (preview)                  |
+| Any MCP client | ✅      | Follows MCP stdio spec                |
 
 The `init` command detects which assistants you use and registers the server automatically in the right place.
 
@@ -61,9 +64,8 @@ The `init` command detects which assistants you use and registers the server aut
 
 The index lives locally. The assistant fetches only what's relevant. The numbers speak for themselves:
 
-
 | Project size | Without cco         | With cco            | Savings   |
-| ------------ | ------------------- | ------------------- | --------- |
+|--------------|---------------------|---------------------|-----------|
 | \~200 files  | \~5k tokens/query   | \~1.2k tokens/query | **\~75%** |
 | \~1000 files | \~10k tokens/query  | \~1.5k tokens/query | **\~85%** |
 | \~5000 files | \~20k+ tokens/query | \~2k tokens/query   | **\~90%** |
@@ -74,9 +76,8 @@ These are context tokens — the portion you control. Savings scale with project
 
 ## Tools exposed
 
-
 | Tool                 | When to use                                                                      |
-| -------------------- | -------------------------------------------------------------------------------- |
+|----------------------|----------------------------------------------------------------------------------|
 | `search_code(query)` | Conceptual queries:*"how does billing work"*,*"where is authentication handled"* |
 | `get_symbol(name)`   | Exact lookups:*"find PaymentService"*,*"where is handleWebhook defined"*         |
 | `index_status`       | Debug: how many files and chunks are currently indexed                           |
@@ -85,10 +86,12 @@ Add this to your project's `CLAUDE.md` (or equivalent) to guide the assistant:
 
 ```markdown
 ## Context Search
+
 Always use MCP tools before reading files:
+
 - search_code() — for conceptual or natural language queries
 - get_symbol() — for exact class/function/method lookups
-Only read full files if both tools return insufficient context.
+  Only read full files if both tools return insufficient context.
 ```
 
 ---
@@ -166,9 +169,8 @@ The `.claude-context/` directory is automatically added to `.gitignore`.
 
 ### Index size reference
 
-
 | Project | Files        | Approx size |
-| ------- | ------------ | ----------- |
+|---------|--------------|-------------|
 | Small   | \~200 files  | \~15 MB     |
 | Medium  | \~1000 files | \~70 MB     |
 | Large   | \~5000 files | \~350 MB    |
@@ -184,7 +186,8 @@ A lightweight web dashboard is available at `http://localhost:3000` while the se
 * **Search** — test queries manually and see scores (useful for calibrating `minScore`)
 * **Files** — full list of indexed files with chunk counts
 
-The dashboard runs on port `3333` by default. If that port is already taken (e.g. two projects open simultaneously), the port is automatically calculated from the project name. To open:
+The dashboard runs on port `3333` by default. If that port is already taken (e.g. two projects open simultaneously), the port is automatically calculated from the project name. To
+open:
 
 ```bash
 mcplens dashboard
@@ -208,9 +211,8 @@ Everything runs on your machine:
 
 ## Why not just use existing tools?
 
-
-| Tool                         | Language    | Fully local?                      | Install friction                     |
-| ---------------------------- | ----------- | --------------------------------- | ------------------------------------ |
+| Tool                         | Language    | Fully local?                     | Install friction                     |
+|------------------------------|-------------|----------------------------------|--------------------------------------|
 | `claude-context`(Zilliz)     | TypeScript  | ❌ requires Zilliz Cloud + OpenAI | Medium                               |
 | `claude-context-local`       | Python      | ✅                                | High (torch, FAISS, pipx)            |
 | `cocoindex-code`             | Python      | ✅                                | Medium (pipx, sentence-transformers) |
@@ -230,7 +232,8 @@ The goal is to be the **most accessible option for JS/TS developers** — not th
 * [X]  Multi-client init (Claude Code, Cursor, Windsurf, Trae)
 * [ ]  Docker option with bundled Ollama
 * [ ]  Contextual retrieval (LLM-generated chunk summaries)
-* [ ]  Hybrid search (BM25 + semantic)
+
+
 * [ ]  Token usage analytics via Claude Code hooks
 
 ---
@@ -251,9 +254,12 @@ MIT
 
 > Semantic codebase search for AI coding assistants — 70-85% token reduction, 100% local, zero cloud dependency.
 
-AI coding assistants like Claude Code, Cursor, and Codex are powerful — but they have a fundamental problem: when you ask a question, they read files by guessing which ones are relevant based on path and filename heuristics. On a medium-sized project, a single query can consume 10,000–20,000 tokens of context just loading files that may not even be relevant.
+AI coding assistants like Claude Code, Cursor, and Codex are powerful — but they have a fundamental problem: when you ask a question, they read files by guessing which ones are
+relevant based on path and filename heuristics. On a medium-sized project, a single query can consume 10,000–20,000 tokens of context just loading files that may not even be
+relevant.
 
-`claude-context-optimizer` solves this by giving your AI assistant **semantic search** over your codebase. Instead of reading files blindly, it calls `search_code("how does payment work?")` and gets back only the 5 most relevant code chunks — indexed locally using embeddings, stored in SQLite, zero data leaving your machine.
+`claude-context-optimizer` solves this by giving your AI assistant **semantic search** over your codebase. Instead of reading files blindly, it calls
+`search_code("how does payment work?")` and gets back only the 5 most relevant code chunks — indexed locally using embeddings, stored in SQLite, zero data leaving your machine.
 
 ---
 
@@ -290,17 +296,17 @@ Without cco:                          With cco:
 
 ## Compatibility
 
-`claude-context-optimizer` works with **any MCP-compatible AI coding assistant**. MCP (Model Context Protocol) is an open standard — the same server works across all clients without modification.
-
+`claude-context-optimizer` works with **any MCP-compatible AI coding assistant**. MCP (Model Context Protocol) is an open standard — the same server works across all clients
+without modification.
 
 | Assistant      | Status | Config location                       |
-| -------------- | ------ | ------------------------------------- |
-| Claude Code    | ✅     | `~/.claude.json`                      |
-| Cursor         | ✅     | `.cursor/mcp.json`                    |
-| Windsurf       | ✅     | `~/.codeium/windsurf/mcp_config.json` |
-| Trae           | ✅     | `.vscode/settings.json`               |
-| Codex          | ✅     | MCP config (preview)                  |
-| Any MCP client | ✅     | Follows MCP stdio spec                |
+|----------------|--------|---------------------------------------|
+| Claude Code    | ✅      | `~/.claude.json`                      |
+| Cursor         | ✅      | `.cursor/mcp.json`                    |
+| Windsurf       | ✅      | `~/.codeium/windsurf/mcp_config.json` |
+| Trae           | ✅      | `.vscode/settings.json`               |
+| Codex          | ✅      | MCP config (preview)                  |
+| Any MCP client | ✅      | Follows MCP stdio spec                |
 
 The `init` command detects which assistants you use and registers the server automatically in the right place.
 
@@ -310,9 +316,8 @@ The `init` command detects which assistants you use and registers the server aut
 
 The index lives locally. The assistant fetches only what's relevant. The numbers speak for themselves:
 
-
 | Project size | Without cco         | With cco            | Savings   |
-| ------------ | ------------------- | ------------------- | --------- |
+|--------------|---------------------|---------------------|-----------|
 | \~200 files  | \~5k tokens/query   | \~1.2k tokens/query | **\~75%** |
 | \~1000 files | \~10k tokens/query  | \~1.5k tokens/query | **\~85%** |
 | \~5000 files | \~20k+ tokens/query | \~2k tokens/query   | **\~90%** |
@@ -323,9 +328,8 @@ These are context tokens — the portion you control. Savings scale with project
 
 ## Tools exposed
 
-
 | Tool                 | When to use                                                                      |
-| -------------------- | -------------------------------------------------------------------------------- |
+|----------------------|----------------------------------------------------------------------------------|
 | `search_code(query)` | Conceptual queries:*"how does billing work"*,*"where is authentication handled"* |
 | `get_symbol(name)`   | Exact lookups:*"find PaymentService"*,*"where is handleWebhook defined"*         |
 | `index_status`       | Debug: how many files and chunks are currently indexed                           |
@@ -334,10 +338,12 @@ Add this to your project's `CLAUDE.md` (or equivalent) to guide the assistant:
 
 ```markdown
 ## Context Search
+
 Always use MCP tools before reading files:
+
 - search_code() — for conceptual or natural language queries
 - get_symbol() — for exact class/function/method lookups
-Only read full files if both tools return insufficient context.
+  Only read full files if both tools return insufficient context.
 ```
 
 ---
@@ -415,9 +421,8 @@ The `.claude-context/` directory is automatically added to `.gitignore`.
 
 ### Index size reference
 
-
 | Project | Files        | Approx size |
-| ------- | ------------ | ----------- |
+|---------|--------------|-------------|
 | Small   | \~200 files  | \~15 MB     |
 | Medium  | \~1000 files | \~70 MB     |
 | Large   | \~5000 files | \~350 MB    |
@@ -433,7 +438,8 @@ A lightweight web dashboard is available at `http://localhost:3000` while the se
 * **Search** — test queries manually and see scores (useful for calibrating `minScore`)
 * **Files** — full list of indexed files with chunk counts
 
-The dashboard runs on port `3333` by default. If that port is already taken (e.g. two projects open simultaneously), the port is automatically calculated from the project name. To open:
+The dashboard runs on port `3333` by default. If that port is already taken (e.g. two projects open simultaneously), the port is automatically calculated from the project name. To
+open:
 
 ```bash
 mcplens dashboard
@@ -457,9 +463,8 @@ Everything runs on your machine:
 
 ## Why not just use existing tools?
 
-
-| Tool                         | Language    | Fully local?                      | Install friction                     |
-| ---------------------------- | ----------- | --------------------------------- | ------------------------------------ |
+| Tool                         | Language    | Fully local?                     | Install friction                     |
+|------------------------------|-------------|----------------------------------|--------------------------------------|
 | `claude-context`(Zilliz)     | TypeScript  | ❌ requires Zilliz Cloud + OpenAI | Medium                               |
 | `claude-context-local`       | Python      | ✅                                | High (torch, FAISS, pipx)            |
 | `cocoindex-code`             | Python      | ✅                                | Medium (pipx, sentence-transformers) |
@@ -477,9 +482,9 @@ The goal is to be the **most accessible option for JS/TS developers** — not th
 * [X]  Real-time file watcher
 * [X]  Dashboard
 * [X]  Multi-client init (Claude Code, Cursor, Windsurf, Trae)
+* [X]  Hybrid search (BM25 + semantic)
 * [ ]  Docker option with bundled Ollama
 * [ ]  Contextual retrieval (LLM-generated chunk summaries)
-* [ ]  Hybrid search (BM25 + semantic)
 * [ ]  Token usage analytics via Claude Code hooks
 
 ---

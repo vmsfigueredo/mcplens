@@ -5,6 +5,7 @@ import path from 'path'
 import { openDatabase, upsertChunks } from '../indexer/database.js'
 import { cosineSimilarity } from '../indexer/embeddings.js'
 import { searchCode, getSymbol } from './search.js'
+import { buildBM25Index } from './bm25.js'
 import type Database from 'better-sqlite3'
 import type { EmbeddingsConfig } from '../indexer/embeddings.js'
 
@@ -98,6 +99,97 @@ describe('searchCode', () => {
 describe('cosineSimilarity (imported via search test)', () => {
   it('scores vecA vs vecA as 1', () => {
     expect(cosineSimilarity(vecA, vecA)).toBeCloseTo(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// searchCode — hybrid path
+// ---------------------------------------------------------------------------
+
+describe('searchCode — hybrid', () => {
+  it('hybridAlpha=0 with no bm25Index produces identical ordering to pure semantic', async () => {
+    vi.mocked(getEmbedding).mockResolvedValue(vecA)
+
+    const pure = await searchCode(db, 'query', embeddingsConfig, { minScore: -1, topK: 10 })
+    const hybrid = await searchCode(db, 'query', embeddingsConfig, { minScore: -1, topK: 10, hybridAlpha: 0 })
+
+    expect(hybrid.map(r => r.filepath)).toEqual(pure.map(r => r.filepath))
+    expect(hybrid.map(r => r.score)).toEqual(pure.map(r => r.score))
+  })
+
+  it('hybridAlpha=0 with a supplied BM25 index still uses pure semantic (fast path)', async () => {
+    vi.mocked(getEmbedding).mockResolvedValue(vecA)
+
+    const bm25Index = buildBM25Index(chunks.map(c => ({ id: c.id, content: c.content })))
+    const pure = await searchCode(db, 'query', embeddingsConfig, { minScore: -1, topK: 10 })
+    const hybrid = await searchCode(db, 'query', embeddingsConfig, { minScore: -1, topK: 10, hybridAlpha: 0 }, bm25Index)
+
+    expect(hybrid.map(r => r.filepath)).toEqual(pure.map(r => r.filepath))
+  })
+
+  it('hybridAlpha=1 ranks by BM25 alone — exact keyword match wins', async () => {
+    // Give all chunks zero cosine similarity so semantic can't influence ordering.
+    vi.mocked(getEmbedding).mockResolvedValue([0, 0, 1])
+
+    // "baz" appears only in chunk c's content ("const baz = 1").
+    const bm25Index = buildBM25Index(chunks.map(c => ({ id: c.id, content: c.content })))
+    const results = await searchCode(
+      db, 'baz', embeddingsConfig,
+      { minScore: -1, topK: 10, hybridAlpha: 1 },
+      bm25Index
+    )
+
+    expect(results[0].filepath).toBe('src/c.ts')
+  })
+
+  it('hybridAlpha=0.3 blended: chunk scoring on both beats chunk scoring on only one', async () => {
+    // Insert two extra chunks:
+    //   'd' — high cosine, zero BM25 (no keyword)
+    //   'e' — mid cosine, has keyword
+    const vecD = [0.9, 0.1, 0]
+    const vecE = [0.6, 0.4, 0]
+    upsertChunks(db, [
+      { id: 'd', filepath: 'src/d.ts', startLine: 1, endLine: 2, content: 'no matching keywords here', embedding: vecD, updatedAt: 1 },
+      { id: 'e', filepath: 'src/e.ts', startLine: 1, endLine: 2, content: 'target keyword match', embedding: vecE, updatedAt: 1 },
+    ])
+
+    // Query embedding close to vecD so chunk d wins on cosine.
+    vi.mocked(getEmbedding).mockResolvedValue([1, 0, 0])
+
+    const allChunks = [
+      ...chunks,
+      { id: 'd', content: 'no matching keywords here' },
+      { id: 'e', content: 'target keyword match' },
+    ]
+    const bm25Index = buildBM25Index(allChunks)
+
+    // Query contains the keyword "target" which is only in chunk e.
+    const results = await searchCode(
+      db, 'target', embeddingsConfig,
+      { minScore: -1, topK: 10, hybridAlpha: 0.3 },
+      bm25Index
+    )
+
+    const eResult = results.find(r => r.filepath === 'src/e.ts')
+    const dResult = results.find(r => r.filepath === 'src/d.ts')
+    // e has keyword advantage; d has cosine advantage but zero BM25.
+    // With alpha=0.3, e's blended score should exceed d's.
+    expect(eResult).toBeDefined()
+    expect(dResult).toBeDefined()
+    expect(eResult!.score).toBeGreaterThan(dResult!.score)
+  })
+
+  it('minScore filters the blended score in hybrid mode', async () => {
+    vi.mocked(getEmbedding).mockResolvedValue([0, 0, 1]) // all cosine scores ~0
+    const bm25Index = buildBM25Index(chunks.map(c => ({ id: c.id, content: c.content })))
+
+    // All chunks get near-zero blended score; a high minScore should exclude them.
+    const results = await searchCode(
+      db, 'nomatch', embeddingsConfig,
+      { minScore: 0.9, topK: 10, hybridAlpha: 0.3 },
+      bm25Index
+    )
+    expect(results).toHaveLength(0)
   })
 })
 

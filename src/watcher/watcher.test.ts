@@ -145,4 +145,37 @@ describe('startWatcher', () => {
     // indexFile should not have been called since timer was cleared
     expect(vi.mocked(indexFile)).not.toHaveBeenCalled()
   })
+
+  it('invokes onIndexChanged after a file change is indexed', async () => {
+    const onIndexChanged = vi.fn()
+    startWatcher(db, makeConfig({ onIndexChanged }))
+
+    const filepath = path.join(tmpDir, 'src/foo.ts')
+    watcherEmitter.emit('change', filepath)
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS + 10)
+
+    expect(onIndexChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('invokes onIndexChanged after a file is removed', async () => {
+    const onIndexChanged = vi.fn()
+    startWatcher(db, makeConfig({ onIndexChanged }))
+
+    const filepath = path.join(tmpDir, 'src/gone.ts')
+    watcherEmitter.emit('unlink', filepath)
+    await vi.advanceTimersByTimeAsync(10)
+
+    expect(onIndexChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('invokes onIndexChanged after an add event', async () => {
+    const onIndexChanged = vi.fn()
+    startWatcher(db, makeConfig({ onIndexChanged }))
+
+    const filepath = path.join(tmpDir, 'src/newfile.ts')
+    watcherEmitter.emit('add', filepath)
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS + 10)
+
+    expect(onIndexChanged).toHaveBeenCalledTimes(1)
+  })
 })

@@ -12,6 +12,7 @@ export interface ProjectConfig {
   search?: {
     topK?: number
     minScore?: number
+    hybridAlpha?: number  // 0 = pure semantic, 1 = pure BM25, default 0.3
   }
 }
 
@@ -24,6 +25,7 @@ const DEFAULT_CONFIG: ProjectConfig = {
   search: {
     topK: 5,
     minScore: 0.3,
+    hybridAlpha: 0.3,
   },
 }
 
@@ -36,7 +38,11 @@ export function loadConfig(projectRoot: string): ProjectConfig {
 
   try {
     const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-    return { ...DEFAULT_CONFIG, ...raw }
+    return {
+      ...DEFAULT_CONFIG,
+      ...raw,
+      search: { ...DEFAULT_CONFIG.search, ...raw.search },
+    }
   } catch {
     process.stderr.write(`[mcplens] invalid config at ${configPath}, using defaults\n`)
     return DEFAULT_CONFIG
