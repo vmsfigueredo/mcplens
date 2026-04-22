@@ -1,6 +1,6 @@
 {
   "name": "@vmsfigueredo/mcplens",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Local MCP server that gives AI coding assistants semantic search over your codebase using embeddings",
   "type": "module",
   "main": "./dist/mcp/server.js",
