@@ -28,7 +28,7 @@ curl -fsSL https://ollama.ai/install.sh | sh
 ### Step 1 — Install the package
 
 ```bash
-npm install -g claude-context-optimizer
+npm install -g @vmsfigueredo/mcplens
 ```
 
 ### Step 2 — Start Ollama and pull the embedding model
@@ -47,7 +47,7 @@ ollama pull nomic-embed-text:latest
 
 ```bash
 cd your-project
-claude-context-optimizer init
+mcplens init
 ```
 
 The `init` command will:
@@ -290,8 +290,8 @@ Add the context search instructions to your `CLAUDE.md` (see above). Without exp
 
 ```bash
 # Clone
-git clone https://github.com/your-user/claude-context-optimizer
-cd claude-context-optimizer
+git clone https://github.com/vmsfigueredo/mcplens
+cd mcplens
 
 # Install dependencies
 npm install
@@ -301,5 +301,5 @@ npm run build
 
 # Test in a project
 cd /your/test-project
-node /path/to/claude-context-optimizer/bin/cli.js init
+node /path/to/mcplens/bin/cli.js init
 ```

@@ -103,12 +103,12 @@ Always use MCP tools before reading files:
 Zero overhead. Best for developers who already have Ollama installed.
 
 ```bash
-npm install -g claude-context-optimizer
+npm install -g @vmsfigueredo/mcplens
 ollama pull nomic-embed-text:latest
-cd your-project && claude-context-optimizer init
+cd your-project && mcplens init
 ```
 
-See [INSTALL.md](https://claude.ai/chat/INSTALL.md) for full setup instructions.
+See [INSTALL.md](INSTALL.md) for full setup instructions.
 
 ### Option B — Docker
 
@@ -209,7 +209,7 @@ Everything runs on your machine:
 | `claude-context-local`       | Python      | ✅                                | High (torch, FAISS, pipx)            |
 | `cocoindex-code`             | Python      | ✅                                | Medium (pipx, sentence-transformers) |
 | `codegraph`                  | Rust        | ✅                                | High (must compile Rust)             |
-| **claude-context-optimizer** | **Node.js** | **✅**                            | **Low (`npm install -g`)**           |
+| **@vmsfigueredo/mcplens**    | **Node.js** | **✅**                            | **Low (`npm install -g`)**           |
 
 The goal is to be the **most accessible option for JS/TS developers** — not the most feature-complete. If you already have Node.js, you're one command away.
 
@@ -231,7 +231,7 @@ The goal is to be the **most accessible option for JS/TS developers** — not th
 
 ## Contributing
 
-PRs welcome. See [INSTALL.md](https://claude.ai/chat/INSTALL.md) for local development setup.
+PRs welcome. See [INSTALL.md](INSTALL.md) for local development setup.
 
 ## Built with
 
