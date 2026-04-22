@@ -26,6 +26,43 @@ const packageRoot = path.resolve(__dirname, '../..')
 const projectRoot = process.cwd()
 const command = process.argv[2]
 
+const MCPLENS_MARKER = '<!-- mcplens-context-block -->'
+const CONTEXT_BLOCK = `
+${MCPLENS_MARKER}
+## Context Search (mcplens)
+
+**MANDATORY — follow these rules before touching any file:**
+
+1. ALWAYS call \`search_code()\` first for any query, conceptual or exact.
+   Examples: "how does authentication work", "where is the payment logic", "UserService"
+2. Use \`get_symbol()\` only when \`search_code()\` returns no results for an exact name.
+3. Reading files directly (without first searching) is NOT allowed.
+   Only open a full file if both tools returned insufficient context.
+4. Never browse the file tree to find things — use \`search_code()\` instead.
+
+This rule exists to reduce token usage. Violating it defeats the purpose of mcplens.
+`
+
+function writeInstructionsFile(filePath: string, label: string) {
+  if (fs.existsSync(filePath)) {
+    const content = fs.readFileSync(filePath, 'utf-8')
+    if (content.includes(MCPLENS_MARKER)) {
+      const updated = content.replace(
+        new RegExp(`${MCPLENS_MARKER}[\\s\\S]*?(?=\\n## |$)`),
+        CONTEXT_BLOCK.trimEnd()
+      )
+      fs.writeFileSync(filePath, updated)
+      console.log(`✅ Updated mcplens block in ${label}`)
+    } else {
+      fs.appendFileSync(filePath, CONTEXT_BLOCK)
+      console.log(`✅ Appended context search instructions to ${label}`)
+    }
+  } else {
+    fs.writeFileSync(filePath, CONTEXT_BLOCK.trimStart())
+    console.log(`✅ Created ${label} with context search instructions`)
+  }
+}
+
 async function runInit() {
   console.log('🔧 Initializing mcplens...\n')
 
@@ -48,44 +85,7 @@ async function runInit() {
     console.log('ℹ️  .mcplens/config.json already exists')
   }
 
-  // 2. Create or update CLAUDE.md with context search instructions
-  const claudeMdPath = path.join(projectRoot, 'CLAUDE.md')
-  const MCPLENS_MARKER = '<!-- mcplens-context-block -->'
-  const contextBlock = `
-${MCPLENS_MARKER}
-## Context Search (mcplens)
-
-**MANDATORY — follow these rules before touching any file:**
-
-1. ALWAYS call \`search_code()\` first for any query, conceptual or exact.
-   Examples: "how does authentication work", "where is the payment logic", "UserService"
-2. Use \`get_symbol()\` only when \`search_code()\` returns no results for an exact name.
-3. Reading files directly (without first searching) is NOT allowed.
-   Only open a full file if both tools returned insufficient context.
-4. Never browse the file tree to find things — use \`search_code()\` instead.
-
-This rule exists to reduce token usage. Violating it defeats the purpose of mcplens.
-`
-  if (fs.existsSync(claudeMdPath)) {
-    const content = fs.readFileSync(claudeMdPath, 'utf-8')
-    if (content.includes(MCPLENS_MARKER)) {
-      // Replace the existing block between the marker and the next ## heading (or EOF)
-      const updated = content.replace(
-        new RegExp(`${MCPLENS_MARKER}[\\s\\S]*?(?=\\n## |$)`),
-        contextBlock.trimEnd()
-      )
-      fs.writeFileSync(claudeMdPath, updated)
-      console.log('✅ Updated mcplens block in CLAUDE.md')
-    } else {
-      fs.appendFileSync(claudeMdPath, contextBlock)
-      console.log('✅ Appended context search instructions to CLAUDE.md')
-    }
-  } else {
-    fs.writeFileSync(claudeMdPath, contextBlock.trimStart())
-    console.log('✅ Created CLAUDE.md with context search instructions')
-  }
-
-  // 3. Add .mcplens to .gitignore
+  // 2. Add .mcplens to .gitignore
   const gitignorePath = path.join(projectRoot, '.gitignore')
   const entry = '.mcplens/'
   if (fs.existsSync(gitignorePath)) {
@@ -136,6 +136,7 @@ Which AI coding assistants are you using? (comma-separated numbers, e.g. 1,2)
     claudeJson.projects[projectRoot].mcpServers['mcplens'] = mcpEntry
     writeJson(claudePath, claudeJson)
     console.log('✅ Registered in Claude Code')
+    writeInstructionsFile(path.join(projectRoot, 'CLAUDE.md'), 'CLAUDE.md')
   }
 
   // Cursor (.cursor/mcp.json at project root) — flat mcpServers
@@ -146,6 +147,7 @@ Which AI coding assistants are you using? (comma-separated numbers, e.g. 1,2)
     cursorJson.mcpServers['mcplens'] = mcpEntry
     writeJson(cursorPath, cursorJson)
     console.log('✅ Registered in Cursor')
+    writeInstructionsFile(path.join(projectRoot, '.cursorrules'), '.cursorrules')
   }
 
   // Windsurf (~/.codeium/windsurf/mcp_config.json) — flat mcpServers
@@ -156,6 +158,7 @@ Which AI coding assistants are you using? (comma-separated numbers, e.g. 1,2)
     windsurfJson.mcpServers['mcplens'] = mcpEntry
     writeJson(windsurfPath, windsurfJson)
     console.log('✅ Registered in Windsurf')
+    writeInstructionsFile(path.join(projectRoot, '.windsurfrules'), '.windsurfrules')
   }
 
   const dashboardNote = enableDashboard
