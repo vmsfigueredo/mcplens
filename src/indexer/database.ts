@@ -41,14 +41,6 @@ export function openDatabase(projectRoot: string): Db {
       indexed_at  INTEGER NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS dependencies (
-      from_file   TEXT NOT NULL,
-      to_file     TEXT NOT NULL,
-      PRIMARY KEY (from_file, to_file)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_dep_from ON dependencies(from_file);
-    CREATE INDEX IF NOT EXISTS idx_dep_to   ON dependencies(to_file);
   `)
 
   return db
@@ -108,35 +100,3 @@ export function getAllFileHashes(db: Db): Record<string, string> {
   return Object.fromEntries(rows.map(r => [r.filepath, r.hash]))
 }
 
-export function upsertDependencies(db: Db, fromFile: string, toFiles: string[]): void {
-  db.prepare('DELETE FROM dependencies WHERE from_file = ?').run(fromFile)
-  if (toFiles.length === 0) return
-  const stmt = db.prepare('INSERT OR IGNORE INTO dependencies (from_file, to_file) VALUES (?, ?)')
-  db.exec('BEGIN')
-  try {
-    for (const toFile of toFiles) stmt.run(fromFile, toFile)
-    db.exec('COMMIT')
-  } catch (err) {
-    db.exec('ROLLBACK')
-    throw err
-  }
-}
-
-export function deleteDependencies(db: Db, filepath: string): void {
-  db.prepare('DELETE FROM dependencies WHERE from_file = ?').run(filepath)
-}
-
-export function getDependsOn(db: Db, filepath: string): string[] {
-  const rows = db.prepare('SELECT to_file FROM dependencies WHERE from_file = ?').all(filepath) as any[]
-  return rows.map(r => r.to_file)
-}
-
-export function getUsedBy(db: Db, filepath: string): string[] {
-  const rows = db.prepare('SELECT from_file FROM dependencies WHERE to_file = ?').all(filepath) as any[]
-  return rows.map(r => r.from_file)
-}
-
-export function dependenciesTableEmpty(db: Db): boolean {
-  const row = db.prepare('SELECT COUNT(*) as c FROM dependencies').get() as any
-  return row.c === 0
-}

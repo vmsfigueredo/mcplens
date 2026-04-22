@@ -117,21 +117,6 @@ export function getSymbolHttp(port: number, name: string, sessionId?: string): P
   })
 }
 
-export function getRelatedHttp(port: number, filepath: string, depth: number, sessionId?: string): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => { req.destroy(); reject(new Error('timeout')) }, 5000)
-    const headers: http.OutgoingHttpHeaders = {}
-    if (sessionId) headers['X-Mcplens-Session'] = sessionId
-    const qs = `filepath=${encodeURIComponent(filepath)}&depth=${depth}`
-    const req = http.get({ hostname: '127.0.0.1', port, path: `/api/related?${qs}`, headers }, res => {
-      let out = ''
-      res.on('data', (d: Buffer) => { out += d.toString() })
-      res.on('end', () => { clearTimeout(timeout); resolve(JSON.parse(out)) })
-    })
-    req.on('error', (e) => { clearTimeout(timeout); reject(e) })
-  })
-}
-
 export function getStatsHttp(port: number): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => { req.destroy(); reject(new Error('timeout')) }, 5000)

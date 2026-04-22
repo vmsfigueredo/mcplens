@@ -6,10 +6,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import path from 'path'
-import { openDatabase, getAllChunks, getDependsOn, getUsedBy, dependenciesTableEmpty, upsertDependencies, getAllFileHashes } from '../indexer/database.js'
+import { openDatabase, getAllChunks } from '../indexer/database.js'
 import { indexProject } from '../indexer/indexer.js'
-import { extractDependencies } from '../indexer/dependency-extractor.js'
-import { detectLanguage } from '../indexer/ast-chunker.js'
 import { searchCode, getSymbol } from '../search/search.js'
 import { buildBM25Index, BM25Cache } from '../search/bm25.js'
 import { startWatcher } from '../watcher/watcher.js'
@@ -18,7 +16,7 @@ import { startDashboard, emitActivity, setIndexing, recordSearch, DashboardHandl
 import { dashboardFallbackPort } from '../utils/port.js'
 import {
   readLockfile, writeLockfile, deleteLockfile,
-  isPidAlive, probeHost, postSession, postSearch, getSymbolHttp, getRelatedHttp, getStatsHttp,
+  isPidAlive, probeHost, postSession, postSearch, getSymbolHttp, getStatsHttp,
 } from '../utils/lockfile.js'
 import fs from 'fs'
 
@@ -32,37 +30,6 @@ const noDashboard = args.includes('--no-dashboard')
 
 // Grace period before host shuts down after last client disconnects (ms)
 const SHUTDOWN_GRACE_MS = 30_000
-
-function detectLanguageLoose(filepath: string): string {
-  if (filepath.endsWith('.svelte')) return 'svelte'
-  return detectLanguage(filepath) ?? ''
-}
-
-function formatRelated(
-  filepath: string,
-  dependsOn: string[],
-  usedBy: string[],
-  dependsOn2: string[],
-  usedBy2: string[]
-): string {
-  const lines: string[] = [`## ${filepath}`, '']
-  lines.push(`**Depends on (${dependsOn.length} files):**`)
-  if (dependsOn.length === 0) lines.push('  _(none)_')
-  else dependsOn.forEach(f => lines.push(`  - ${f}`))
-  if (dependsOn2.length > 0) {
-    lines.push(`\n**Also depends on via 2 hops (${dependsOn2.length} files):**`)
-    dependsOn2.forEach(f => lines.push(`  - ${f}`))
-  }
-  lines.push('')
-  lines.push(`**Used by (${usedBy.length} files):**`)
-  if (usedBy.length === 0) lines.push('  _(none)_')
-  else usedBy.forEach(f => lines.push(`  - ${f}`))
-  if (usedBy2.length > 0) {
-    lines.push(`\n**Also used by via 2 hops (${usedBy2.length} files):**`)
-    usedBy2.forEach(f => lines.push(`  - ${f}`))
-  }
-  return lines.join('\n')
-}
 // Client heartbeat interval (ms)
 const HEARTBEAT_INTERVAL_MS = 10_000
 
@@ -146,27 +113,6 @@ async function runAsClient(hostPort: number) {
         return { content: [{ type: 'text' as const, text }] }
       } catch (err) {
         return { content: [{ type: 'text' as const, text: `Symbol lookup error: ${err}` }] }
-      }
-    }
-  )
-
-  server.tool(
-    'get_related',
-    'Get files related to a given file — what it imports (depends_on) and what imports it (used_by). Useful for understanding blast radius before refactoring.',
-    {
-      filepath: z.string().describe('File path relative to project root (e.g. src/services/PaymentService.ts)'),
-      depth: z.number().optional().describe('Dependency hops to follow (default: 1, max: 2)'),
-    },
-    async ({ filepath, depth = 1 }) => {
-      try {
-        const d = Math.max(1, Math.min(2, depth))
-        const data = await getRelatedHttp(hostPort, filepath, d, sessionId) as any
-        if (!data.dependsOn && !data.usedBy) {
-          return { content: [{ type: 'text' as const, text: `No dependency data found for ${filepath}. Make sure the file is indexed.` }] }
-        }
-        return { content: [{ type: 'text' as const, text: formatRelated(filepath, data.dependsOn ?? [], data.usedBy ?? [], [], []) }] }
-      } catch (err) {
-        return { content: [{ type: 'text' as const, text: `get_related error: ${err}` }] }
       }
     }
   )
@@ -348,30 +294,6 @@ async function runAsHost() {
     }
   )
 
-  server.tool(
-    'get_related',
-    'Get files related to a given file — what it imports (depends_on) and what imports it (used_by). Useful for understanding blast radius before refactoring.',
-    {
-      filepath: z.string().describe('File path relative to project root (e.g. src/services/PaymentService.ts)'),
-      depth: z.number().optional().describe('Dependency hops to follow (default: 1, max: 2)'),
-    },
-    async ({ filepath, depth = 1 }) => {
-      const d = Math.max(1, Math.min(2, depth))
-      const dependsOn = getDependsOn(db, filepath)
-      const usedBy = getUsedBy(db, filepath)
-      if (dependsOn.length === 0 && usedBy.length === 0) {
-        return { content: [{ type: 'text' as const, text: `No dependency data found for ${filepath}. Make sure the file is indexed.` }] }
-      }
-      const dependsOn2 = d === 2
-        ? Array.from(new Set(dependsOn.flatMap(f => getDependsOn(db, f)).filter(f => f !== filepath && !dependsOn.includes(f))))
-        : []
-      const usedBy2 = d === 2
-        ? Array.from(new Set(usedBy.flatMap(f => getUsedBy(db, f)).filter(f => f !== filepath && !usedBy.includes(f))))
-        : []
-      return { content: [{ type: 'text' as const, text: formatRelated(filepath, dependsOn, usedBy, dependsOn2, usedBy2) }] }
-    }
-  )
-
   server.tool('index_status', 'Shows how many files and chunks are currently indexed.', {}, async () => {
     const files = (db.prepare('SELECT COUNT(DISTINCT filepath) as c FROM chunks').get() as any).c
     const chunks = (db.prepare('SELECT COUNT(*) as c FROM chunks').get() as any).c
@@ -412,24 +334,6 @@ async function runAsHost() {
       emitActivity({ ts: Date.now(), type: 'startup', file: 'indexing failed' })
     } finally {
       setIndexing(false)
-    }
-
-    // One-time dep-graph backfill for existing indexes that predate this feature.
-    if (dependenciesTableEmpty(db)) {
-      process.stderr.write(`[mcplens] backfilling dependency graph...\n`)
-      const hashes = getAllFileHashes(db)
-      for (const relPath of Object.keys(hashes)) {
-        try {
-          const abs = path.join(projectRoot, relPath)
-          const content = fs.readFileSync(abs, 'utf-8')
-          const lang = detectLanguageLoose(relPath)
-          const deps = extractDependencies(content, relPath, projectRoot, lang)
-          upsertDependencies(db, relPath, deps)
-        } catch (e) {
-          process.stderr.write(`[mcplens] dep backfill failed for ${relPath}: ${e}\n`)
-        }
-      }
-      process.stderr.write(`[mcplens] dependency graph backfill complete\n`)
     }
 
     // Build BM25 index once after initial indexing completes.

@@ -95,9 +95,8 @@ Switch to OpenAI by changing `provider` to `"openai"` and adding `"openaiApiKey"
 1. ALWAYS call `search_code()` first for any query, conceptual or exact.
    Examples: "how does authentication work", "where is the payment logic", "UserService"
 2. Use `get_symbol()` only when `search_code()` returns no results for an exact name.
-3. Use `get_related(filepath)` before any refactor, to understand blast radius.
-4. Reading files directly (without first searching) is NOT allowed.
-   Only open a full file if all three tools returned insufficient context.
-5. Never browse the file tree to find things — use `search_code()` instead.
+3. Reading files directly (without first searching) is NOT allowed.
+   Only open a full file if both tools returned insufficient context.
+4. Never browse the file tree to find things — use `search_code()` instead.
 
 This rule exists to reduce token usage. Violating it defeats the purpose of mcplens.
