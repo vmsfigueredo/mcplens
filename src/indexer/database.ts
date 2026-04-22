@@ -18,7 +18,7 @@ export interface ChunkRow {
 }
 
 export function openDatabase(projectRoot: string): Database.Database {
-  const dir = path.join(projectRoot, '.claude-context')
+  const dir = path.join(projectRoot, '.mcplens')
   fs.mkdirSync(dir, { recursive: true })
 
   const db = new Database(path.join(dir, 'index.db'))

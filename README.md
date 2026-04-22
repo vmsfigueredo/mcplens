@@ -1,13 +1,13 @@
-# claude-context-optimizer
+# mcplens
 
-Local MCP server that gives Claude Code **semantic search** over your codebase.
+Local MCP server that gives AI coding assistants (Claude Code, Cursor, Windsurf) **semantic search** over your codebase.
 
-Instead of Claude Code reading dozens of files by heuristic, it calls `search_code("how does payment work?")` and gets back only the 5 most relevant chunks — saving tokens and improving response quality.
+Instead of reading dozens of files by heuristic, your AI assistant calls `search_code("how does payment work?")` and gets back only the 5 most relevant chunks — saving tokens and improving response quality.
 
 ## How it works
 
 1. On startup, indexes your codebase using [Ollama](https://ollama.ai) embeddings (100% local, free)
-2. Stores chunks + vectors in a local SQLite file (`.claude-context/index.db`)
+2. Stores chunks + vectors in a local SQLite file (`.mcplens/index.db`)
 3. On subsequent startups, only re-indexes files that changed (delta by hash)
 4. Watches for file changes during your session and re-indexes in real time
 5. Exposes 3 tools to Claude Code via MCP stdio transport
@@ -30,21 +30,21 @@ Instead of Claude Code reading dozens of files by heuristic, it calls `search_co
 
 ```bash
 # 1. Install globally
-npm install -g claude-context-optimizer
+npm install -g mcplens
 
 # 2. Pull the embedding model (one-time, ~270MB)
 ollama pull nomic-embed-text
 
 # 3. Initialize in your project — this configures everything automatically
 cd your-project
-claude-context-optimizer init
+mcplens init
 
-# 4. Open Claude Code — done.
+# 4. Open your AI coding assistant — done.
 ```
 
-**That's it.** `init` writes the config, updates `.gitignore`, and registers the MCP server in `~/.claude.json` so Claude Code picks it up automatically on the next startup. No manual JSON editing required.
+**That's it.** `init` writes the config, updates `.gitignore`, and registers the MCP server in your chosen AI coding assistant configs (Claude Code, Cursor, Windsurf — you pick during init). No manual JSON editing required.
 
-When Claude Code opens, the MCP server starts in the background, indexes your codebase (or skips unchanged files), and begins watching for changes in real time.
+When your AI coding assistant opens, the MCP server starts in the background, indexes your codebase (or skips unchanged files), and begins watching for changes in real time.
 
 ## Dashboard
 
@@ -65,7 +65,7 @@ The dashboard runs on `:3333` to avoid conflicts with common dev servers (`:3000
 
 ## Configuration
 
-Edit `.claude-context/config.json` to customize:
+Edit `.mcplens/config.json` to customize:
 
 ```json
 {
@@ -110,7 +110,7 @@ Ignored by default: `node_modules`, `.git`, `vendor`, `dist`, `build`, `.next`
 | ~1000 files | ~70 MB |
 | ~5000 files | ~350 MB |
 
-The `.claude-context/` directory is automatically added to `.gitignore`.
+The `.mcplens/` directory is automatically added to `.gitignore`.
 
 ## License
 

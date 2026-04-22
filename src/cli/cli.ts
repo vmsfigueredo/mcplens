@@ -10,6 +10,16 @@ function ask(question: string): Promise<string> {
   return new Promise(resolve => rl.question(question, ans => { rl.close(); resolve(ans) }))
 }
 
+function readJson(p: string): any {
+  if (!fs.existsSync(p)) return {}
+  try { return JSON.parse(fs.readFileSync(p, 'utf-8')) } catch { return {} }
+}
+
+function writeJson(p: string, data: any) {
+  fs.mkdirSync(path.dirname(p), { recursive: true })
+  fs.writeFileSync(p, JSON.stringify(data, null, 2) + '\n')
+}
+
 // __dirname = dist/cli/ when compiled; two levels up reaches the package root
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const packageRoot = path.resolve(__dirname, '../..')
@@ -17,10 +27,10 @@ const projectRoot = process.cwd()
 const command = process.argv[2]
 
 async function runInit() {
-  console.log('🔧 Initializing claude-context-optimizer...\n')
+  console.log('🔧 Initializing mcplens...\n')
 
-  // 1. Create .claude-context/config.json
-  const dir = path.join(projectRoot, '.claude-context')
+  // 1. Create .mcplens/config.json
+  const dir = path.join(projectRoot, '.mcplens')
   fs.mkdirSync(dir, { recursive: true })
 
   const configPath = path.join(dir, 'config.json')
@@ -33,22 +43,22 @@ async function runInit() {
       },
       search: { topK: 5, minScore: 0.3 },
     }, null, 2) + '\n')
-    console.log('✅ Created .claude-context/config.json')
+    console.log('✅ Created .mcplens/config.json')
   } else {
-    console.log('ℹ️  .claude-context/config.json already exists')
+    console.log('ℹ️  .mcplens/config.json already exists')
   }
 
   // 2. Create or update CLAUDE.md with context search instructions
   const claudeMdPath = path.join(projectRoot, 'CLAUDE.md')
   const contextBlock = `
-## Context Search (claude-context-optimizer)
+## Context Search (mcplens)
 - Use search_code() for conceptual queries ("how does payment work")
 - Use get_symbol() for exact lookups ("find PaymentService class")
 - Only read full files if both tools return insufficient context
 `
   if (fs.existsSync(claudeMdPath)) {
     const content = fs.readFileSync(claudeMdPath, 'utf-8')
-    if (!content.includes('claude-context-optimizer')) {
+    if (!content.includes('mcplens')) {
       fs.appendFileSync(claudeMdPath, contextBlock)
       console.log('✅ Updated CLAUDE.md with context search instructions')
     } else {
@@ -59,61 +69,91 @@ async function runInit() {
     console.log('✅ Created CLAUDE.md with context search instructions')
   }
 
-  // 4. Add .claude-context to .gitignore
+  // 3. Add .mcplens to .gitignore
   const gitignorePath = path.join(projectRoot, '.gitignore')
-  const entry = '.claude-context/'
+  const entry = '.mcplens/'
   if (fs.existsSync(gitignorePath)) {
     const content = fs.readFileSync(gitignorePath, 'utf-8')
     if (!content.includes(entry)) {
-      fs.appendFileSync(gitignorePath, `\n# claude-context-optimizer\n${entry}\n`)
-      console.log('✅ Added .claude-context/ to .gitignore')
+      fs.appendFileSync(gitignorePath, `\n# mcplens\n${entry}\n`)
+      console.log('✅ Added .mcplens/ to .gitignore')
     }
   } else {
-    fs.writeFileSync(gitignorePath, `# claude-context-optimizer\n${entry}\n`)
-    console.log('✅ Created .gitignore with .claude-context/')
+    fs.writeFileSync(gitignorePath, `# mcplens\n${entry}\n`)
+    console.log('✅ Created .gitignore with .mcplens/')
   }
 
-  // 5. Register MCP server in ~/.claude.json
-  const homePath = path.join(process.env.HOME || '~', '.claude.json')
-  const serverPath = path.resolve(packageRoot, 'dist', 'mcp', 'server.js')
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let claudeJson: any = {}
-  if (fs.existsSync(homePath)) {
-    try { claudeJson = JSON.parse(fs.readFileSync(homePath, 'utf-8')) }
-    catch { claudeJson = {} }
-  }
-
-  if (!claudeJson.projects) claudeJson.projects = {}
-  if (!claudeJson.projects[projectRoot]) claudeJson.projects[projectRoot] = {}
-  if (!claudeJson.projects[projectRoot].mcpServers) claudeJson.projects[projectRoot].mcpServers = {}
-
+  // 4. Ask about dashboard
   const dashboardAnswer = await ask('Enable dashboard? [Y/n] ')
   const enableDashboard = dashboardAnswer.trim().toLowerCase() !== 'n'
 
+  // 5. Ask which AI coding assistants to register
+  const home = process.env.HOME || '~'
+  console.log(`
+Which AI coding assistants are you using? (comma-separated numbers, e.g. 1,2)
+  1) Claude Code  (~/.claude.json)
+  2) Cursor       (.cursor/mcp.json in project root)
+  3) Windsurf     (~/.codeium/windsurf/mcp_config.json)`)
+  const clientAnswer = await ask('> ')
+  const selected = clientAnswer.trim() === ''
+    ? new Set([1])
+    : new Set(
+        clientAnswer.split(/[,\s]+/)
+          .map(s => parseInt(s, 10))
+          .filter(n => n >= 1 && n <= 3)
+      )
+  if (selected.size === 0) selected.add(1)
+
+  const serverPath = path.resolve(packageRoot, 'dist', 'mcp', 'server.js')
   const mcpArgs = [serverPath, '--project', projectRoot]
   if (!enableDashboard) mcpArgs.push('--no-dashboard')
 
-  claudeJson.projects[projectRoot].mcpServers['context-optimizer'] = {
-    command: 'node',
-    args: mcpArgs,
+  const mcpEntry = { command: 'node', args: mcpArgs }
+
+  // Claude Code (~/.claude.json) — project-scoped
+  if (selected.has(1)) {
+    const claudePath = path.join(home, '.claude.json')
+    const claudeJson = readJson(claudePath)
+    if (!claudeJson.projects) claudeJson.projects = {}
+    if (!claudeJson.projects[projectRoot]) claudeJson.projects[projectRoot] = {}
+    if (!claudeJson.projects[projectRoot].mcpServers) claudeJson.projects[projectRoot].mcpServers = {}
+    claudeJson.projects[projectRoot].mcpServers['mcplens'] = mcpEntry
+    writeJson(claudePath, claudeJson)
+    console.log('✅ Registered in Claude Code')
   }
 
-  fs.writeFileSync(homePath, JSON.stringify(claudeJson, null, 2) + '\n')
-  console.log(`✅ Registered MCP server in ~/.claude.json for this project`)
+  // Cursor (.cursor/mcp.json at project root) — flat mcpServers
+  if (selected.has(2)) {
+    const cursorPath = path.join(projectRoot, '.cursor', 'mcp.json')
+    const cursorJson = readJson(cursorPath)
+    if (!cursorJson.mcpServers) cursorJson.mcpServers = {}
+    cursorJson.mcpServers['mcplens'] = mcpEntry
+    writeJson(cursorPath, cursorJson)
+    console.log('✅ Registered in Cursor')
+  }
+
+  // Windsurf (~/.codeium/windsurf/mcp_config.json) — flat mcpServers
+  if (selected.has(3)) {
+    const windsurfPath = path.join(home, '.codeium', 'windsurf', 'mcp_config.json')
+    const windsurfJson = readJson(windsurfPath)
+    if (!windsurfJson.mcpServers) windsurfJson.mcpServers = {}
+    windsurfJson.mcpServers['mcplens'] = mcpEntry
+    writeJson(windsurfPath, windsurfJson)
+    console.log('✅ Registered in Windsurf')
+  }
 
   const dashboardNote = enableDashboard
-    ? `🌐 Dashboard will be served at: http://localhost:3333 (falls back to ${dashboardFallbackPort(projectRoot)} if 3333 is busy)\n   Run: claude-context-optimizer dashboard`
+    ? `🌐 Dashboard will be served at: http://localhost:3333 (falls back to ${dashboardFallbackPort(projectRoot)} if 3333 is busy)\n   Run: mcplens dashboard`
     : `ℹ️  Dashboard disabled`
 
   console.log(`
 🎉 Done! Next steps:
    1. Make sure Ollama is running:  ollama serve
    2. Pull the embedding model:     ollama pull nomic-embed-text:latest
-   3. Open Claude Code in this project — indexing runs automatically on startup
+   3. Open your AI coding assistant in this project — indexing runs automatically on startup
 
-📁 Index will be stored in: .claude-context/index.db
-⚙️  Config at: .claude-context/config.json
+📁 Index will be stored in: .mcplens/index.db
+⚙️  Config at: .mcplens/config.json
 ${dashboardNote}
 `)
 }
@@ -121,12 +161,12 @@ ${dashboardNote}
 if (command === 'init') {
   await runInit()
 } else if (command === 'start') {
-  // Direct start (for testing outside Claude Code)
+  // Direct start (for testing outside an AI coding assistant)
   const serverPath = path.resolve(packageRoot, 'dist', 'mcp', 'server.js')
   execSync(`node ${serverPath} --project ${projectRoot}`, { stdio: 'inherit' })
 
 } else if (command === 'dashboard') {
-  const portFile = path.join(projectRoot, '.claude-context', 'dashboard.port')
+  const portFile = path.join(projectRoot, '.mcplens', 'dashboard.port')
   const port = fs.existsSync(portFile) ? Number(fs.readFileSync(portFile, 'utf-8').trim()) : 3333
   const url = `http://localhost:${port}`
   console.log(`Opening dashboard at ${url}`)
@@ -137,13 +177,13 @@ if (command === 'init') {
 
 } else {
   console.log(`
-claude-context-optimizer — semantic codebase search for Claude Code
+mcplens — semantic codebase search for Claude Code, Cursor, and Windsurf
 
 Usage:
-  claude-context-optimizer init       Set up this project (run once)
-  claude-context-optimizer start      Start the MCP server manually (for testing)
-  claude-context-optimizer dashboard  Open the dashboard in your browser
+  mcplens init       Set up this project (run once)
+  mcplens start      Start the MCP server manually (for testing)
+  mcplens dashboard  Open the dashboard in your browser
 
-GitHub: https://github.com/your-username/claude-context-optimizer
+GitHub: https://github.com/your-username/mcplens
 `)
 }

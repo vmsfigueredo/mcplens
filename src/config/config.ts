@@ -1,5 +1,5 @@
 // src/config/config.ts
-// Loads and validates the project config from .claude-context/config.json
+// Loads and validates the project config from .mcplens/config.json
 
 import fs from 'fs'
 import path from 'path'
@@ -28,7 +28,7 @@ const DEFAULT_CONFIG: ProjectConfig = {
 }
 
 export function loadConfig(projectRoot: string): ProjectConfig {
-  const configPath = path.join(projectRoot, '.claude-context', 'config.json')
+  const configPath = path.join(projectRoot, '.mcplens', 'config.json')
 
   if (!fs.existsSync(configPath)) {
     return DEFAULT_CONFIG
@@ -38,13 +38,13 @@ export function loadConfig(projectRoot: string): ProjectConfig {
     const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
     return { ...DEFAULT_CONFIG, ...raw }
   } catch {
-    process.stderr.write(`[cco] invalid config at ${configPath}, using defaults\n`)
+    process.stderr.write(`[mcplens] invalid config at ${configPath}, using defaults\n`)
     return DEFAULT_CONFIG
   }
 }
 
 export function writeDefaultConfig(projectRoot: string): void {
-  const dir = path.join(projectRoot, '.claude-context')
+  const dir = path.join(projectRoot, '.mcplens')
   const configPath = path.join(dir, 'config.json')
 
   if (fs.existsSync(configPath)) return

@@ -43,7 +43,7 @@ const DEFAULT_IGNORE = [
   '**/dist/**',
   '**/build/**',
   '**/.next/**',
-  '**/.claude-context/**',
+  '**/.mcplens/**',
   '**/storage/logs/**',
   '**/bootstrap/cache/**',
 ]
@@ -163,7 +163,7 @@ export async function indexProject(
       indexed++
     } catch (err) {
       failed++
-      process.stderr.write(`[cco] failed to index ${relPath}: ${err instanceof Error ? err.message : err}\n`)
+      process.stderr.write(`[mcplens] failed to index ${relPath}: ${err instanceof Error ? err.message : err}\n`)
     }
   }
 

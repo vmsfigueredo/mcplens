@@ -7,14 +7,14 @@ export interface Chunk {
 }
 
 export interface ChunkerConfig {
-  chunkLines?: number    // lines per chunk (default: 60)
-  overlapLines?: number  // overlap between chunks (default: 15)
+  chunkLines?: number    // lines per chunk (default: 40)
+  overlapLines?: number  // overlap between chunks (default: 10)
   minChunkChars?: number // skip chunks smaller than this (default: 20)
 }
 
 export function chunkBySlidingWindow(content: string, config: ChunkerConfig = {}): Chunk[] {
-  const chunkLines = config.chunkLines ?? 60
-  const overlapLines = config.overlapLines ?? 15
+  const chunkLines = config.chunkLines ?? 40
+  const overlapLines = config.overlapLines ?? 10
   const minChunkChars = config.minChunkChars ?? 20
 
   const lines = content.split('\n')

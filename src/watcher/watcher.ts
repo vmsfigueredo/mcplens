@@ -5,7 +5,7 @@ import chokidar from 'chokidar'
 import path from 'path'
 import Database from 'better-sqlite3'
 import { indexFile, removeFile, IndexerConfig } from '../indexer/indexer.js'
-import { ActivityEvent } from '../dashboard/dashboard.js'
+import { ActivityEvent } from '../dashboard/index.js'
 
 const DEBOUNCE_MS = 300
 
@@ -27,7 +27,7 @@ export function startWatcher(
       '**/dist/**',
       '**/build/**',
       '**/.next/**',
-      '**/.claude-context/**',
+      '**/.mcplens/**',
       '**/.idea/**',
       '**/.vscode/**',
       '**/*.iml',
@@ -45,10 +45,10 @@ export function startWatcher(
       try {
         await indexFile(db, filepath, config.projectRoot, config)
         const rel = path.relative(config.projectRoot, filepath)
-        process.stderr.write(`[cco] re-indexed: ${rel}\n`)
+        process.stderr.write(`[mcplens] re-indexed: ${rel}\n`)
         config.onActivity?.({ ts: Date.now(), type: 'indexed', file: rel })
       } catch (err) {
-        process.stderr.write(`[cco] error indexing ${filepath}: ${err}\n`)
+        process.stderr.write(`[mcplens] error indexing ${filepath}: ${err}\n`)
       }
     }, DEBOUNCE_MS)
 
@@ -58,7 +58,7 @@ export function startWatcher(
   const handleRemove = async (filepath: string) => {
     await removeFile(db, filepath, config.projectRoot)
     const rel = path.relative(config.projectRoot, filepath)
-    process.stderr.write(`[cco] removed from index: ${rel}\n`)
+    process.stderr.write(`[mcplens] removed from index: ${rel}\n`)
     config.onActivity?.({ ts: Date.now(), type: 'removed', file: rel })
   }
 

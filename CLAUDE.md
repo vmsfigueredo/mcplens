@@ -19,10 +19,10 @@ npm run start
 npm run dev
 
 # Initialize in a target project (run from that project's directory)
-claude-context-optimizer init
+mcplens init
 
 # Start MCP server manually against a project
-claude-context-optimizer start
+mcplens start
 ```
 
 The project has no test suite yet. TypeScript strict mode is enforced — `tsc` with no errors is the correctness check.
@@ -41,14 +41,14 @@ src/
     indexer.ts         ← Delta indexing: hash-compare, chunk, embed, upsert
   search/search.ts     ← Semantic search (in-process cosine scan) + symbol lookup
   watcher/watcher.ts   ← chokidar watcher → re-indexes changed files live
-  config/config.ts     ← Loads .claude-context/config.json with defaults
+  config/config.ts     ← Loads .mcplens/config.json with defaults
 bin/cli.js             ← CLI entry (init | start); writes ~/.claude.json
 ```
 
 ## Architecture flow
 
-1. **`init`** writes `.claude-context/config.json`, adds `.claude-context/` to `.gitignore`, and registers the MCP server in `~/.claude.json` for the target project.
-2. **On Claude Code startup**, the MCP server (`server.ts`) is spawned via stdio, loads config, opens SQLite at `.claude-context/index.db`, runs delta indexing (skips files with matching SHA-1 hash), and starts the chokidar watcher.
+1. **`init`** writes `.mcplens/config.json`, adds `.mcplens/` to `.gitignore`, and registers the MCP server in the chosen AI coding assistant configs.
+2. **On AI coding assistant startup**, the MCP server (`server.ts`) is spawned via stdio, loads config, opens SQLite at `.mcplens/index.db`, runs delta indexing (skips files with matching SHA-1 hash), and starts the chokidar watcher.
 3. **Embeddings** are fetched per chunk via Ollama (default: `nomic-embed-text`) or OpenAI. Stored as JSON float arrays in SQLite — no native vector extensions required.
 4. **`search_code`** embeds the query, loads all chunks from SQLite, scores by cosine similarity in-process, filters by `minScore` (default 0.3), returns top K (default 5).
 5. **`get_symbol`** does SQL `LIKE` pattern matching against known declaration keywords (class, function, interface, trait, enum, const, def).
@@ -62,7 +62,7 @@ bin/cli.js             ← CLI entry (init | start); writes ~/.claude.json
 
 ## Configuration
 
-Target project's `.claude-context/config.json`:
+Target project's `.mcplens/config.json`:
 
 ```json
 {
@@ -78,7 +78,7 @@ Target project's `.claude-context/config.json`:
 
 Switch to OpenAI by changing `provider` to `"openai"` and adding `"openaiApiKey"`.
 
-## Context Search (claude-context-optimizer)
+## Context Search (mcplens)
 - Use search_code() for conceptual queries ("how does payment work")
 - Use get_symbol() for exact lookups ("find PaymentService class")
 - Only read full files if both tools return insufficient context

@@ -1,10 +1,10 @@
 {
-  "name": "claude-context-optimizer",
+  "name": "mcplens",
   "version": "0.1.0",
-  "description": "Local MCP server that gives Claude Code semantic search over your codebase using embeddings",
+  "description": "Local MCP server that gives AI coding assistants semantic search over your codebase using embeddings",
   "type": "module",
   "bin": {
-    "claude-context-optimizer": "./bin/cli.js"
+    "mcplens": "./bin/cli.js"
   },
   "scripts": {
     "build": "tsc",

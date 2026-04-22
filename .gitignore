@@ -17,7 +17,7 @@ dist/
 .DS_Store
 
 # project index
-.claude-context/
+.mcplens/
 
 # claude code
 CLAUDE.md

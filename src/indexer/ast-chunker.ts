@@ -27,41 +27,42 @@ const CHUNK_NODES: Record<LangKey, Set<string>> = {
   typescript: new Set([
     'function_declaration',
     'method_definition',
-    'class_declaration',
     'interface_declaration',
     'type_alias_declaration',
     'enum_declaration',
-    'abstract_class_declaration',
   ]),
   tsx: new Set([
     'function_declaration',
     'method_definition',
-    'class_declaration',
     'interface_declaration',
     'type_alias_declaration',
     'enum_declaration',
-    'abstract_class_declaration',
     'jsx_element',
     'jsx_self_closing_element',
   ]),
   javascript: new Set([
     'function_declaration',
     'method_definition',
-    'class_declaration',
   ]),
   php: new Set([
     'function_definition',
     'method_declaration',
-    'class_declaration',
-    'trait_declaration',
     'interface_declaration',
     'enum_declaration',
   ]),
   python: new Set([
     'function_definition',
-    'class_definition',
     'decorated_definition',
   ]),
+}
+
+// Container node types we descend into (to find methods) rather than chunk as a whole
+const CONTAINER_NODES: Record<LangKey, Set<string>> = {
+  typescript: new Set(['class_declaration', 'abstract_class_declaration']),
+  tsx: new Set(['class_declaration', 'abstract_class_declaration']),
+  javascript: new Set(['class_declaration']),
+  php: new Set(['class_declaration', 'trait_declaration']),
+  python: new Set(['class_definition']),
 }
 
 // Parent node types whose direct children we promote as chunks
@@ -110,7 +111,8 @@ interface ChunkCandidate {
 
 function collectChunkNodes(
   tree: import('tree-sitter').Tree,
-  chunkNodeTypes: Set<string>
+  chunkNodeTypes: Set<string>,
+  containerNodeTypes: Set<string>
 ): ChunkCandidate[] {
   const candidates: ChunkCandidate[] = []
   const cursor = tree.walk()
@@ -137,6 +139,14 @@ function collectChunkNodes(
       })
       // Skip the matched node's subtree entirely
       if (!skipAndAdvance()) reachedRoot = true
+      continue
+    }
+
+    // Container nodes (classes, traits): descend into them so methods are chunked individually
+    if (containerNodeTypes.has(type)) {
+      if (!cursor.gotoFirstChild()) {
+        if (!skipAndAdvance()) reachedRoot = true
+      }
       continue
     }
 
@@ -232,7 +242,8 @@ export function chunkByAST(
     const tree = parser.parse(content)
 
     const chunkNodeTypes = CHUNK_NODES[lang]
-    const candidates = collectChunkNodes(tree, chunkNodeTypes)
+    const containerNodeTypes = CONTAINER_NODES[lang]
+    const candidates = collectChunkNodes(tree, chunkNodeTypes, containerNodeTypes)
 
     if (candidates.length === 0) {
       return chunkBySlidingWindow(content, config)
