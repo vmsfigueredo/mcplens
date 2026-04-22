@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3'
+import type { Db } from '../../indexer/database.js'
 import { getStyles } from './styles.js'
 import { getClientScript } from './client.js'
 import { renderOverviewTab } from './overview.js'
@@ -9,7 +9,7 @@ import { renderFilesTab } from './files.js'
 import { getStats, getFiles } from '../queries.js'
 import { activityLog, getIndexing } from '../events.js'
 
-export function renderPage(db: Database.Database, projectRoot: string): string {
+export function renderPage(db: Db, projectRoot: string): string {
   const stats = getStats(db, projectRoot, getIndexing())
   const files = getFiles(db)
 

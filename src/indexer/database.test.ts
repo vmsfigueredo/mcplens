@@ -11,12 +11,16 @@ import {
   setFileHash,
   deleteFileHash,
   getAllFileHashes,
+  upsertDependencies,
+  deleteDependencies,
+  getDependsOn,
+  getUsedBy,
+  dependenciesTableEmpty,
 } from './database.js'
-import type { ChunkRow } from './database.js'
-import type Database from 'better-sqlite3'
+import type { ChunkRow, Db } from './database.js'
 
 let tmpDir: string
-let db: Database.Database
+let db: Db
 
 function makeRow(overrides: Partial<ChunkRow> = {}): ChunkRow {
   return {
@@ -156,5 +160,84 @@ describe('getAllFileHashes', () => {
 
   it('returns an empty object when no hashes are stored', () => {
     expect(getAllFileHashes(db)).toEqual({})
+  })
+})
+
+// ---------------------------------------------------------------------------
+// dependencies CRUD
+// ---------------------------------------------------------------------------
+
+describe('openDatabase — dependencies table', () => {
+  it('creates the dependencies table', () => {
+    const row = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='dependencies'").get()
+    expect(row).toBeTruthy()
+  })
+})
+
+describe('dependenciesTableEmpty', () => {
+  it('returns true when no rows exist', () => {
+    expect(dependenciesTableEmpty(db)).toBe(true)
+  })
+
+  it('returns false after inserting a dependency', () => {
+    upsertDependencies(db, 'src/a.ts', ['src/b.ts'])
+    expect(dependenciesTableEmpty(db)).toBe(false)
+  })
+})
+
+describe('upsertDependencies / getDependsOn / getUsedBy', () => {
+  it('stores and retrieves depends-on edges', () => {
+    upsertDependencies(db, 'src/a.ts', ['src/b.ts', 'src/c.ts'])
+    expect(getDependsOn(db, 'src/a.ts').sort()).toEqual(['src/b.ts', 'src/c.ts'])
+  })
+
+  it('stores and retrieves used-by edges (reverse lookup)', () => {
+    upsertDependencies(db, 'src/a.ts', ['src/b.ts'])
+    upsertDependencies(db, 'src/c.ts', ['src/b.ts'])
+    expect(getUsedBy(db, 'src/b.ts').sort()).toEqual(['src/a.ts', 'src/c.ts'])
+  })
+
+  it('replaces all dependencies on re-upsert', () => {
+    upsertDependencies(db, 'src/a.ts', ['src/b.ts', 'src/c.ts'])
+    upsertDependencies(db, 'src/a.ts', ['src/d.ts'])
+    expect(getDependsOn(db, 'src/a.ts')).toEqual(['src/d.ts'])
+  })
+
+  it('clears dependencies when toFiles is empty', () => {
+    upsertDependencies(db, 'src/a.ts', ['src/b.ts'])
+    upsertDependencies(db, 'src/a.ts', [])
+    expect(getDependsOn(db, 'src/a.ts')).toEqual([])
+  })
+
+  it('deduplicates toFiles via INSERT OR IGNORE', () => {
+    upsertDependencies(db, 'src/a.ts', ['src/b.ts', 'src/b.ts'])
+    expect(getDependsOn(db, 'src/a.ts')).toHaveLength(1)
+  })
+
+  it('returns empty array for a file with no dependencies', () => {
+    expect(getDependsOn(db, 'nonexistent.ts')).toEqual([])
+  })
+
+  it('returns empty array for a file with no reverse edges', () => {
+    expect(getUsedBy(db, 'nonexistent.ts')).toEqual([])
+  })
+})
+
+describe('deleteDependencies', () => {
+  it('removes all edges where from_file matches', () => {
+    upsertDependencies(db, 'src/a.ts', ['src/b.ts', 'src/c.ts'])
+    deleteDependencies(db, 'src/a.ts')
+    expect(getDependsOn(db, 'src/a.ts')).toEqual([])
+  })
+
+  it('does not affect edges from other files', () => {
+    upsertDependencies(db, 'src/a.ts', ['src/b.ts'])
+    upsertDependencies(db, 'src/c.ts', ['src/b.ts'])
+    deleteDependencies(db, 'src/a.ts')
+    expect(getUsedBy(db, 'src/b.ts')).toEqual(['src/c.ts'])
+  })
+
+  it('does not throw when no edges exist', () => {
+    expect(() => deleteDependencies(db, 'nope.ts')).not.toThrow()
   })
 })

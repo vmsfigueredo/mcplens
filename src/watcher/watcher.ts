@@ -3,7 +3,7 @@
 
 import chokidar from 'chokidar'
 import path from 'path'
-import Database from 'better-sqlite3'
+import type { Db } from '../indexer/database.js'
 import { indexFile, removeFile, IndexerConfig } from '../indexer/indexer.js'
 import { ActivityEvent } from '../dashboard/index.js'
 
@@ -15,7 +15,7 @@ export interface WatcherConfig extends IndexerConfig {
 }
 
 export function startWatcher(
-  db: Database.Database,
+  db: Db,
   config: WatcherConfig
 ): () => void {
   const timers = new Map<string, NodeJS.Timeout>()

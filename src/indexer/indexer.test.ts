@@ -4,7 +4,7 @@ import os from 'os'
 import path from 'path'
 import { openDatabase, getAllChunks, getFileHash, getAllFileHashes } from './database.js'
 import { indexFile, removeFile, indexProject } from './indexer.js'
-import type Database from 'better-sqlite3'
+import type { Db } from './database.js'
 import type { IndexerConfig } from './indexer.js'
 
 vi.mock('./embeddings.js', () => ({
@@ -12,7 +12,7 @@ vi.mock('./embeddings.js', () => ({
 }))
 
 let tmpDir: string
-let db: Database.Database
+let db: Db
 
 const embeddingsConfig = { provider: 'ollama' as const }
 

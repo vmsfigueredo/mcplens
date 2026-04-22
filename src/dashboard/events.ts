@@ -2,7 +2,7 @@ import http from 'http'
 
 export type ActivityEvent =
   | { ts: number; type: 'indexed' | 'removed' | 'startup'; file: string; chunks?: number }
-  | { ts: number; type: 'search' | 'symbol'; query: string; results: number; latencyMs: number; sessionId: string }
+  | { ts: number; type: 'search' | 'symbol' | 'related'; query: string; results: number; latencyMs: number; sessionId: string }
 
 export const activityLog: ActivityEvent[] = []
 export const sseClients = new Set<http.ServerResponse>()
@@ -21,7 +21,7 @@ export function emitActivity(event: ActivityEvent): void {
   for (const res of sseClients) res.write(data)
 }
 
-export function recordSearch(opts: { type: 'search' | 'symbol'; query: string; results: number; latencyMs: number; sessionId: string }): void {
+export function recordSearch(opts: { type: 'search' | 'symbol' | 'related'; query: string; results: number; latencyMs: number; sessionId: string }): void {
   emitActivity({ ts: Date.now(), ...opts })
 }
 
@@ -32,7 +32,7 @@ export function getIndexing(): boolean {
 // Server-side event HTML — must stay in sync with eventHtmlStr in views/client.ts
 export function eventHtml(e: ActivityEvent, _isNew: boolean = false): string {
   const t = new Date(e.ts).toLocaleTimeString()
-  if (e.type === 'search' || e.type === 'symbol') {
+  if (e.type === 'search' || e.type === 'symbol' || e.type === 'related') {
     const latency = `<span class="latency">${e.latencyMs}ms</span>`
     const session = `<span class="session-chip">${e.sessionId}</span>`
     const count = `<span class="result-count">${e.results} result${e.results !== 1 ? 's' : ''}</span>`

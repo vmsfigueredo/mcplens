@@ -36,13 +36,13 @@ vi.mock('../dashboard/index.js', () => ({}))
 import { startWatcher } from './watcher.js'
 import { indexFile, removeFile } from '../indexer/indexer.js'
 import { openDatabase } from '../indexer/database.js'
-import type Database from 'better-sqlite3'
+import type { Db } from '../indexer/database.js'
 import type { WatcherConfig } from './watcher.js'
 
 const DEBOUNCE_MS = 300
 
 let tmpDir: string
-let db: Database.Database
+let db: Db
 
 function makeConfig(overrides: Partial<WatcherConfig> = {}): WatcherConfig {
   return {

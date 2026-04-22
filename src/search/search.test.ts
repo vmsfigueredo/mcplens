@@ -6,7 +6,7 @@ import { openDatabase, upsertChunks } from '../indexer/database.js'
 import { cosineSimilarity } from '../indexer/embeddings.js'
 import { searchCode, getSymbol } from './search.js'
 import { buildBM25Index } from './bm25.js'
-import type Database from 'better-sqlite3'
+import type { Db } from '../indexer/database.js'
 import type { EmbeddingsConfig } from '../indexer/embeddings.js'
 
 vi.mock('../indexer/embeddings.js', async (importOriginal) => {
@@ -22,7 +22,7 @@ import { getEmbedding } from '../indexer/embeddings.js'
 const embeddingsConfig: EmbeddingsConfig = { provider: 'ollama' }
 
 let tmpDir: string
-let db: Database.Database
+let db: Db
 
 // Three orthogonal unit-vector embeddings for predictable cosine scores
 const vecA = [1, 0, 0]   // "most similar" to query [1,0,0]

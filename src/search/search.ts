@@ -3,7 +3,7 @@
 // Fetches all embeddings from SQLite and does cosine similarity in-process.
 // For very large projects (50k+ chunks), consider sqlite-vec for ANN.
 
-import Database from 'better-sqlite3'
+import type { Db } from '../indexer/database.js'
 import {getEmbedding, cosineSimilarity, EmbeddingsConfig} from '../indexer/embeddings.js'
 import {getAllChunks} from '../indexer/database.js'
 import { BM25Index, scoreBM25 } from './bm25.js'
@@ -27,7 +27,7 @@ function fileTypeBoost(filepath: string): number {
 }
 
 export async function searchCode(
-    db: Database.Database,
+    db: Db,
     query: string,
     embeddingsConfig: EmbeddingsConfig,
     config: SearchConfig = {},
@@ -81,7 +81,7 @@ export async function searchCode(
 }
 
 export function getSymbol(
-    db: Database.Database,
+    db: Db,
     symbolName: string
 ): SearchResult[] {
     // Exact text search for class/function/method definitions

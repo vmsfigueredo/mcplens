@@ -1,14 +1,14 @@
 import http from 'http'
-import Database from 'better-sqlite3'
+import type { Db } from '../../indexer/database.js'
 import { getFiles, getChunksByFile } from '../queries.js'
 
-export function handleFiles(req: http.IncomingMessage, res: http.ServerResponse, db: Database.Database): void {
+export function handleFiles(req: http.IncomingMessage, res: http.ServerResponse, db: Db): void {
   const files = getFiles(db)
   res.writeHead(200, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify(files))
 }
 
-export function handleFileChunks(req: http.IncomingMessage, res: http.ServerResponse, db: Database.Database, url: URL): void {
+export function handleFileChunks(req: http.IncomingMessage, res: http.ServerResponse, db: Db, url: URL): void {
   const filepath = url.searchParams.get('path')
   if (!filepath) {
     res.writeHead(400, { 'Content-Type': 'application/json' })

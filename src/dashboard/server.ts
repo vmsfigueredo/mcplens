@@ -1,10 +1,11 @@
 import http from 'http'
-import Database from 'better-sqlite3'
+import type { Db } from '../indexer/database.js'
 import { handlePage } from './routes/page.js'
 import { handleStats, handleWhoami } from './routes/stats.js'
 import { handleFiles, handleFileChunks } from './routes/files.js'
 import { handleSearchGet, handleSearchPost } from './routes/search.js'
 import { handleSymbol } from './routes/symbol.js'
+import { handleRelated } from './routes/related.js'
 import { handleSession } from './routes/session.js'
 import { handleEvents } from './routes/events.js'
 import { sseClients } from './events.js'
@@ -17,7 +18,7 @@ export interface DashboardHandle {
 const serverStartedAt = Date.now()
 
 export function startDashboard(
-  db: Database.Database,
+  db: Db,
   projectRoot: string,
   embeddingsConfig: any,
   searchConfig: any,
@@ -40,6 +41,7 @@ export function startDashboard(
       if (pathname === '/api/search' && method === 'GET') return await handleSearchGet(req, res, db, url, embeddingsConfig, searchConfig)
       if (pathname === '/api/search' && method === 'POST') return await handleSearchPost(req, res, db, embeddingsConfig)
       if (pathname === '/api/symbol') return await handleSymbol(req, res, db, url)
+      if (pathname === '/api/related') return await handleRelated(req, res, db, url)
       if (pathname === '/api/session' && method === 'POST') return await handleSession(req, res, projectRoot)
 
       handlePage(req, res, db, projectRoot)

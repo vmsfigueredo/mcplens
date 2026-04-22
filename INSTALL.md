@@ -4,7 +4,7 @@
 
 ### Prerequisites
 
-* **Node.js 20+** — [nodejs.org](https://nodejs.org/)
+* **Node.js 22.4+** — [nodejs.org](https://nodejs.org/)
 * **Ollama** — [ollama.ai](https://ollama.ai/)
 
 #### Installing Ollama

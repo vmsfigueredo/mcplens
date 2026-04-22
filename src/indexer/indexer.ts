@@ -5,12 +5,16 @@ import crypto from 'crypto'
 import path from 'path'
 import fs from 'fs'
 import { glob } from 'glob'
-import Database from 'better-sqlite3'
+import type { Db } from './database.js'
 import { chunkFile } from './chunker.js'
 import { getEmbedding, EmbeddingsConfig } from './embeddings.js'
+import { detectLanguage } from './ast-chunker.js'
+import { extractDependencies } from './dependency-extractor.js'
 import {
   upsertChunks,
   deleteChunksByFile,
+  upsertDependencies,
+  deleteDependencies,
   getFileHash,
   setFileHash,
   deleteFileHash,
@@ -61,12 +65,17 @@ function hashFile(content: string): string {
   return crypto.createHash('sha1').update(content).digest('hex')
 }
 
+function detectLanguageLoose(filepath: string): string {
+  if (filepath.endsWith('.svelte')) return 'svelte'
+  return detectLanguage(filepath) ?? ''
+}
+
 function chunkId(filepath: string, startLine: number): string {
   return crypto.createHash('md5').update(`${filepath}:${startLine}`).digest('hex')
 }
 
 export async function indexFile(
-  db: Database.Database,
+  db: Db,
   filepath: string,
   projectRoot: string,
   config: IndexerConfig
@@ -100,21 +109,27 @@ export async function indexFile(
   }
 
   upsertChunks(db, rows)
+
+  const lang = detectLanguageLoose(relPath)
+  const deps = extractDependencies(content, relPath, projectRoot, lang)
+  upsertDependencies(db, relPath, deps)
+
   setFileHash(db, relPath, hash)
 }
 
 export async function removeFile(
-  db: Database.Database,
+  db: Db,
   filepath: string,
   projectRoot: string
 ): Promise<void> {
   const relPath = path.relative(projectRoot, filepath)
   deleteChunksByFile(db, relPath)
+  deleteDependencies(db, relPath)
   deleteFileHash(db, relPath)
 }
 
 export async function indexProject(
-  db: Database.Database,
+  db: Db,
   config: IndexerConfig
 ): Promise<{ indexed: number; skipped: number; removed: number; failed: number }> {
   const extensions = config.extensions ?? DEFAULT_EXTENSIONS

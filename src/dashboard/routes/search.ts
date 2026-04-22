@@ -1,9 +1,9 @@
 import http from 'http'
-import Database from 'better-sqlite3'
+import type { Db } from '../../indexer/database.js'
 import { readBody } from '../utils.js'
 import { recordSearch } from '../events.js'
 
-export async function handleSearchGet(req: http.IncomingMessage, res: http.ServerResponse, db: Database.Database, url: URL, embeddingsConfig: any, searchConfig: any): Promise<void> {
+export async function handleSearchGet(req: http.IncomingMessage, res: http.ServerResponse, db: Db, url: URL, embeddingsConfig: any, searchConfig: any): Promise<void> {
   const query = url.searchParams.get('q') ?? ''
   if (!query) { res.writeHead(400); res.end('[]'); return }
   const sessionId = (req.headers['x-mcplens-session'] as string | undefined) ?? 'unknown'
@@ -20,7 +20,7 @@ export async function handleSearchGet(req: http.IncomingMessage, res: http.Serve
   }
 }
 
-export async function handleSearchPost(req: http.IncomingMessage, res: http.ServerResponse, db: Database.Database, embeddingsConfig: any): Promise<void> {
+export async function handleSearchPost(req: http.IncomingMessage, res: http.ServerResponse, db: Db, embeddingsConfig: any): Promise<void> {
   const body = await readBody(req)
   const { query, topK, minScore } = JSON.parse(body) as { query: string; topK?: number; minScore?: number }
   if (!query) { res.writeHead(400); res.end('[]'); return }
